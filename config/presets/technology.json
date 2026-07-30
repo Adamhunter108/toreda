@@ -1,0 +1,17 @@
+{
+  "_comment": [
+    "Technology and AI — concentrated by design.",
+    "",
+    "Read this before choosing it: these names move together. On a bad day for",
+    "semiconductors most of this list falls at once, so a portfolio built from it",
+    "is closer to one position than to twenty. That can be a deliberate bet, but",
+    "it should be a deliberate one. See docs/building-a-watchlist.md."
+  ],
+  "sectors": {
+    "Semiconductors": ["NVDA", "AMD", "AVGO", "TSM", "ARM", "MU"],
+    "Mega-cap Tech": ["AAPL", "MSFT", "GOOGL", "AMZN", "META"],
+    "Software & Data": ["PLTR", "SNOW", "CRM", "DDOG", "NOW"],
+    "Networking & Security": ["NET", "CRWD", "ZS", "PANW"],
+    "Broad Market": ["QQQ"]
+  }
+}

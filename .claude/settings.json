@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "permissions": {
+    "allow": [
+      "Bash(npm run toreda -- account:*)",
+      "Bash(npm run toreda -- portfolio:*)",
+      "Bash(npm run toreda -- history:*)",
+      "Bash(npm run toreda -- quote:*)",
+      "Bash(npm run toreda -- watchlist:*)",
+      "Bash(npm run toreda -- scan:*)",
+      "Bash(npm run toreda -- brief:*)",
+      "Bash(npm run toreda -- doctor:*)",
+      "Bash(npm run toreda -- schedule status:*)",
+
+      "Bash(toreda account:*)",
+      "Bash(toreda portfolio:*)",
+      "Bash(toreda history:*)",
+      "Bash(toreda quote:*)",
+      "Bash(toreda watchlist:*)",
+      "Bash(toreda scan:*)",
+      "Bash(toreda brief:*)",
+      "Bash(toreda doctor:*)",
+      "Bash(toreda schedule status:*)",
+
+      "Bash(node bin/toreda.mjs account:*)",
+      "Bash(node bin/toreda.mjs portfolio:*)",
+      "Bash(node bin/toreda.mjs history:*)",
+      "Bash(node bin/toreda.mjs quote:*)",
+      "Bash(node bin/toreda.mjs watchlist:*)",
+      "Bash(node bin/toreda.mjs scan:*)",
+      "Bash(node bin/toreda.mjs brief:*)",
+      "Bash(node bin/toreda.mjs doctor:*)",
+
+      "Bash(npm run scan:*)",
+      "Bash(npm run doctor:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run typecheck:*)",
+
+      "Bash(./node_modules/.bin/tsx:*)",
+
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+
+      "Read(./config/**)",
+      "Read(./journal/**)",
+      "Read(./docs/**)",
+      "Edit(./journal/**)"
+    ],
+
+    "deny": [
+      "Bash(npm run toreda -- order:*)",
+      "Bash(toreda order:*)",
+      "Bash(node bin/toreda.mjs order:*)",
+
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Bash(cat .env:*)",
+      "Bash(grep:* .env)"
+    ]
+  }
+}

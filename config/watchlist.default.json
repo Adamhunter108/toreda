@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "The watchlist — the single source of truth for which symbols this system",
+    "watches. Read by `toreda watchlist`, the scanner, and the dashboard.",
+    "Add or remove a symbol HERE and everything stays in sync.",
+    "",
+    "Positions you actually hold are read live from your account and are ALWAYS",
+    "scanned, whether or not they appear below.",
+    "",
+    "Sector names are yours to choose — they are labels for grouping and for",
+    "the scanner's sectorFocus setting, not a fixed taxonomy.",
+    "",
+    "This default is a broad, liquid starting point spanning several sectors on",
+    "purpose. A watchlist of thirty names from one industry is one bet wearing",
+    "thirty tickers. See docs/building-a-watchlist.md before you tune it."
+  ],
+
+  "sectors": {
+    "Technology": ["AAPL", "MSFT", "GOOGL", "AMZN", "META"],
+    "Semiconductors": ["NVDA", "AMD", "AVGO", "TSM"],
+    "Financials": ["JPM", "BAC", "V"],
+    "Healthcare": ["UNH", "JNJ", "LLY"],
+    "Consumer": ["COST", "KO", "PG"],
+    "Industrials": ["CAT", "HON", "RTX"],
+    "Energy": ["XOM", "NEE"],
+    "Broad Market": ["SPY", "QQQ"]
+  }
+}

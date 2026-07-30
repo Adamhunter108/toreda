@@ -1,0 +1,34 @@
+{
+  "name": "toreda",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Claude-Code-driven Alpaca trading toolkit: terminal dashboard, opportunity scanner, and optional briefings. Nothing trades unless you say so.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "toreda": "./bin/toreda.mjs"
+  },
+  "scripts": {
+    "setup": "tsx src/cli/index.ts setup",
+    "doctor": "tsx src/cli/index.ts doctor",
+    "dash": "tsx src/cli/index.ts dash",
+    "scan": "tsx src/cli/index.ts scan",
+    "toreda": "tsx src/cli/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "demo": "tsx src/cli/index.ts dash --demo"
+  },
+  "dependencies": {
+    "ink": "^5.2.1",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.31",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  }
+}

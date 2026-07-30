@@ -1,0 +1,18 @@
+{
+  "_comment": [
+    "Dividend and value — slower-moving, established businesses.",
+    "",
+    "Note that the scanner's momentum thresholds are tuned for names that move.",
+    "This universe will produce fewer signals, which is a property of the names",
+    "and not a fault. Lower `momentumPct` in config/scanner.json if you want more."
+  ],
+  "sectors": {
+    "Consumer Staples": ["KO", "PG", "PEP", "COST", "WMT"],
+    "Healthcare": ["JNJ", "UNH", "ABBV", "MRK"],
+    "Financials": ["JPM", "BAC", "WFC", "V"],
+    "Industrials": ["CAT", "HON", "UNP", "RTX"],
+    "Energy & Utilities": ["XOM", "CVX", "NEE", "DUK"],
+    "Real Assets": ["AMT", "PLD"],
+    "Broad Market": ["SPY", "SCHD"]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "_comment": [
+    "Dashboard preferences. Change the theme from inside the dashboard with",
+    "`t`, which writes this file. Available: Dracula, Nord, Gruvbox, Default.",
+    "Default inherits your terminal's own palette rather than overriding it."
+  ],
+
+  "theme": "Default"
+}

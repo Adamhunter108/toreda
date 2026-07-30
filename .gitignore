@@ -1,0 +1,32 @@
+# ─── Secrets — never commit ──────────────────────────────────────────────────
+# .env holds live Alpaca API keys. If this file is ever weakened, real money is
+# one `git push` away. Keep the bare name AND the variants.
+.env
+.env.*
+!.env.example
+*.pem
+secrets/
+
+# ─── User configuration (written by `toreda setup`) ──────────────────────────
+# Shipped as config/*.default.json; setup copies them here. Ignoring the copies
+# means a `git pull` never conflicts with someone's tuned thresholds.
+config/watchlist.json
+config/risk.json
+config/scanner.json
+config/ui.json
+
+# ─── User data — trades, reasoning, and account history ──────────────────────
+journal/*
+!journal/.gitkeep
+logs/
+docs/trading-plan.md
+
+# ─── Local working notes ─────────────────────────────────────────────────────
+PLAN.md
+
+# ─── Node ────────────────────────────────────────────────────────────────────
+node_modules/
+
+# ─── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

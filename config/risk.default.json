@@ -1,0 +1,37 @@
+{
+  "_comment": [
+    "Risk thresholds, checked by the scanner on every run.",
+    "",
+    "These do not block anything — `toreda order` places whatever you confirm.",
+    "They decide when the scanner taps you on the shoulder. Set them to where",
+    "you would ACTUALLY want warning: a threshold you intend to ignore is worse",
+    "than none, because it trains you to skim the block where real stop-loss",
+    "breaches appear.",
+    "",
+    "stopLossPct      Percent from entry at which a position should be sold.",
+    "defaultMaxWeight Largest share of the portfolio one symbol may occupy.",
+    "trimProfitPct    Gain at which a position past its ceiling becomes a trim.",
+    "",
+    "Overrides are deliberate, dated exceptions with a written reason. The date",
+    "and reason are the point: without them, an override is indistinguishable",
+    "from drift when you review it six months later. Example:",
+    "",
+    "  \"overrides\": {",
+    "    \"GOOGL\": {",
+    "      \"maxWeight\": 0.40,",
+    "      \"decided\": \"2026-01-15\",",
+    "      \"reason\": \"Long-term holding; accepting the concentration.\"",
+    "    }",
+    "  }",
+    "",
+    "An override raises the SIZE ceiling only. The stop loss applies to every",
+    "position without exception — conviction about a company is not a reason to",
+    "tolerate an open loss."
+  ],
+
+  "stopLossPct": -7,
+  "defaultMaxWeight": 0.25,
+  "trimProfitPct": 25,
+
+  "overrides": {}
+}

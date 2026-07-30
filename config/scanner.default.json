@@ -1,0 +1,45 @@
+{
+  "_comment": [
+    "Scanner thresholds and toggles. Edit here, or from the dashboard's",
+    "settings view (`c`), which writes this same file.",
+    "",
+    "minConfidence  Signals below this are not reported. Confidence is a",
+    "               heuristic ranking aid built from named components, NOT a",
+    "               probability: 8 means 'look at this first', not '80% likely'.",
+    "sectorFocus    Empty means every sector. Add sector names from your",
+    "               watchlist to narrow what gets reported.",
+    "useStockTwits  StockTwits is an undocumented public API with no stability",
+    "               guarantee. Set false to skip social signals entirely.",
+    "",
+    "See docs/scanner.md for what each threshold actually does."
+  ],
+
+  "minConfidence": 7,
+  "maxSignals": 12,
+  "lookbackDays": 14,
+
+  "signalTypes": {
+    "momentum": true,
+    "value_play": true,
+    "news_catalyst": true,
+    "social_buzz": true
+  },
+
+  "thresholds": {
+    "momentumPct": 5,
+    "momentumVolumeMult": 1.2,
+    "valuePullbackPct": -8,
+    "newsPriceAgreePct": 2,
+    "newsPriceAgreeSigma": 1,
+    "socialBullShare": 0.7
+  },
+
+  "discovery": {
+    "enabled": true,
+    "minPrice": 10,
+    "minDollarVolume": 25000000
+  },
+
+  "sectorFocus": [],
+  "useStockTwits": true
+}

@@ -1,0 +1,16 @@
+{
+  "_comment": [
+    "Broad market — liquid names across several sectors.",
+    "A deliberately diversified starting point. See docs/building-a-watchlist.md."
+  ],
+  "sectors": {
+    "Technology": ["AAPL", "MSFT", "GOOGL", "AMZN", "META"],
+    "Semiconductors": ["NVDA", "AMD", "AVGO", "TSM"],
+    "Financials": ["JPM", "BAC", "V"],
+    "Healthcare": ["UNH", "JNJ", "LLY"],
+    "Consumer": ["COST", "KO", "PG"],
+    "Industrials": ["CAT", "HON", "RTX"],
+    "Energy": ["XOM", "NEE"],
+    "Broad Market": ["SPY", "QQQ"]
+  }
+}

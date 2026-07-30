@@ -1,0 +1,31 @@
+{
+  // One config for the whole project. The source repo needed two — a CommonJS
+  // base for the scanner plus an ESM override for the dashboard, because ink and
+  // yoga-layout are ESM-only and yoga uses top-level await. Going ESM everywhere
+  // removes that split, and with it the `ui/package.json` type-module shim.
+  //
+  // moduleResolution "bundler" lets relative imports stay extensionless, which
+  // "nodenext" would forbid. Nothing is ever emitted (noEmit) — tsx runs the
+  // TypeScript directly — so the resolver only has to satisfy the type checker
+  // and tsx, both of which accept this.
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023", "dom"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "jsx": "react",
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+
+    "skipLibCheck": true,
+    "noEmit": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "bin/**/*.mjs"]
+}
