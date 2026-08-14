@@ -54,13 +54,15 @@
       "Bash(npm run toreda -- order:*)",
       "Bash(toreda order:*)",
       "Bash(node bin/toreda.mjs order:*)",
+      "Bash(node ./bin/toreda.mjs order:*)",
+      "Bash(*--confirm*)",
 
       "Read(./.env)",
       "Read(./.env.*)",
       "Edit(./.env)",
       "Edit(./.env.*)",
       "Bash(cat .env:*)",
-      "Bash(grep:* .env)"
+      "Bash(grep:*)"
     ]
   }
 }

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
+import Spinner from "ink-spinner";
 import { actionColor, confColor, mutedProps, plColor } from "../../core/theme";
 import type { ScanResult } from "../../scanner/types";
 import { useTheme } from "../theme/ThemeContext";
@@ -82,7 +83,9 @@ export function SignalsView({
       </Text>
 
       {scanning ? (
-        <Text color={t.warning}>scanning… (runs the full opportunity scan)</Text>
+        <Text color={t.warning}>
+          <Spinner type="dots" /> scanning… (runs the full opportunity scan)
+        </Text>
       ) : null}
       {error ? <Text color={t.negative}>scan failed: {error}</Text> : null}
       {!result && !scanning ? (

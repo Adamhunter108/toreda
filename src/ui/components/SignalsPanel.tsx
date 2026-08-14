@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Box, Text } from "ink";
+import Spinner from "ink-spinner";
 import { actionColor, mutedProps } from "../../core/theme";
 import type { OpportunitySignal } from "../../scanner/types";
 import { useTheme } from "../theme/ThemeContext";
@@ -39,7 +40,12 @@ export function SignalsPanel({
   const below = signals.length - (start + ROWS);
 
   let body: React.ReactNode;
-  if (scanning) body = <Text color={t.warning}>scanning…</Text>;
+  if (scanning)
+    body = (
+      <Text color={t.warning}>
+        <Spinner type="dots" /> scanning…
+      </Text>
+    );
   else if (error) body = <Text color={t.negative}>scan failed — r to retry</Text>;
   else if (!scanned) body = <Text {...mutedProps(t)}>press r to scan</Text>;
   else if (signals.length === 0)
