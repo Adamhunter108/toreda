@@ -1,5 +1,4 @@
 import * as React from "react";
-import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import Spinner from "ink-spinner";
 import { actionColor, confColor, mutedProps, plColor } from "../../core/theme";
@@ -15,11 +14,16 @@ function bar(confidence: number): string {
 }
 
 /**
- * Full-screen scrollable signals view, opened with `g`.
+ * Full-screen scrollable signals view, opened with `g` — or with space on the
+ * focused Signals panel, which makes this its zoomed form.
  *
  * ↑↓ scrolls the ranked opportunities; position alerts sit ABOVE them and
  * discovery below, mirroring the CLI report's ordering — rule breaches outrank
  * any opportunity, and unvetted discovery names never mix into the ranked list.
+ *
+ * The cursor belongs to App and is shared with the compact panel, so zooming in
+ * and back out keeps the same signal highlighted. Both sort by confidence from
+ * the same list, so an index means the same row in each.
  */
 export function SignalsView({
   result,
@@ -28,6 +32,8 @@ export function SignalsView({
   lastRun,
   minConf,
   armed,
+  cursor,
+  onCursor,
   onOrder,
   onRefresh,
   onClose,
@@ -38,12 +44,13 @@ export function SignalsView({
   lastRun: Date | null;
   minConf: number;
   armed: boolean;
+  cursor: number;
+  onCursor: (update: (c: number) => number) => void;
   onOrder: (symbol: string) => void;
   onRefresh: () => void;
   onClose: () => void;
 }) {
   const t = useTheme();
-  const [cursor, setCursor] = useState(0);
   const opps = result
     ? [...result.opportunities].sort((a, b) => b.confidence - a.confidence)
     : [];
@@ -51,11 +58,11 @@ export function SignalsView({
 
   useInput(
     (input, key) => {
-      if (key.escape || input === "q") onClose();
+      if (key.escape || input === "q" || input === " ") onClose();
       else if (input === "r") onRefresh();
       else if (input === "o" && armed && opps[cur]) onOrder(opps[cur]!.symbol);
-      else if (key.downArrow) setCursor((c) => Math.min(opps.length - 1, c + 1));
-      else if (key.upArrow) setCursor((c) => Math.max(0, c - 1));
+      else if (key.downArrow) onCursor((c) => Math.min(opps.length - 1, c + 1));
+      else if (key.upArrow) onCursor((c) => Math.max(0, c - 1));
     },
     { isActive: process.stdin.isTTY === true },
   );
@@ -189,7 +196,7 @@ export function SignalsView({
       ) : null}
 
       <Text {...mutedProps(t)}>
-        {"\n"}↑↓ scroll · r rescan{armed ? " · o order" : ""} · esc back
+        {"\n"}↑↓ scroll · r rescan{armed ? " · o order" : ""} · space/esc back
       </Text>
     </Box>
   );

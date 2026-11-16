@@ -13,17 +13,27 @@ export function EquityChart({
   availCols,
   periodLabel,
   height = 6,
+  maxWidth = 80,
+  focused = false,
 }: {
   equity: number[];
   availCols: number;
   periodLabel: string;
   height?: number;
+  /** Cap on the curve's width in the grid; zoomed, it takes the terminal. */
+  maxWidth?: number;
+  focused?: boolean;
 }) {
   const t = useTheme();
-  const width = Math.max(24, Math.min(availCols - 12, 80));
+  const width = Math.max(24, Math.min(availCols - 12, maxWidth));
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={t.border} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={focused ? t.accent : t.border}
+      paddingX={1}
+    >
       <Text bold>
         Portfolio equity{" "}
         <Text {...mutedProps(t)}>

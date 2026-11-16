@@ -164,19 +164,20 @@ npm run dash
 That's the main event. A wider terminal window gets you a richer layout — drag
 it out before you start.
 
-| Key     | Does                                           |
-| ------- | ---------------------------------------------- |
-| `↑` `↓` | Move around                                    |
-| `tab`   | Jump between positions, watchlist, and signals |
-| `enter` | Open a position — cost, charts, today's range  |
-| `r`     | Run a scan for opportunities                   |
-| `g`     | See all signals in detail                      |
-| `w`     | Add or remove stocks from your watchlist       |
-| `c`     | Adjust the scanner's sensitivity               |
-| `t`     | Change colour theme                            |
-| `p` `s` | Change the chart period / sort the positions   |
-| `h`     | Order history                                  |
-| `q`     | Quit                                           |
+| Key     | Does                                                      |
+| ------- | --------------------------------------------------------- |
+| `↑` `↓` | Move around                                               |
+| `tab`   | Jump between positions, watchlist, signals, and the chart |
+| `space` | Expand the highlighted section to full screen, and back   |
+| `enter` | Open a position — cost, charts, today's range             |
+| `r`     | Run a scan for opportunities                              |
+| `g`     | See all signals in detail                                 |
+| `w`     | Add or remove stocks from your watchlist                  |
+| `c`     | Adjust the scanner's sensitivity                          |
+| `t`     | Change colour theme                                       |
+| `p` `s` | Change the chart period / sort the positions              |
+| `h`     | Order history                                             |
+| `q`     | Quit                                                      |
 
 ### Trading from the dashboard
 

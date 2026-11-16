@@ -44,3 +44,29 @@ export function positionsPanelWidth(cols: number): number {
 export function shouldShowSparkline(cols: number): boolean {
   return positionsPanelWidth(cols) >= POSITION_ROW_WIDTH + SPARK_WIDTH;
 }
+
+// ── Zoomed sections ─────────────────────────────────────────────────────────
+//
+// Space expands the focused section to the whole terminal. Same rule as the
+// grid: extra room goes to the optional elements only after the numbers fit.
+
+/** Widest the zoomed sparkline grows: ~45 calendar days is ~30 sessions. */
+export const ZOOM_SPARK_MAX = 32;
+
+/**
+ * Sparkline width for the zoomed positions panel, which has the whole
+ * terminal. 0 means there is no room for one at the grid's minimum width.
+ */
+export function zoomedSparkWidth(cols: number): number {
+  const room = cols - PANEL_CHROME - POSITION_ROW_WIDTH - 2; // 2 = separator
+  if (room < SPARK_WIDTH - 2) return 0;
+  return Math.min(ZOOM_SPARK_MAX, room);
+}
+
+/** Header box (3), stat bar, status bar, and headroom so Ink never scrolls. */
+export const ZOOM_CHROME_ROWS = 8;
+
+/** Rows a zoomed panel may occupy, after the chrome and any banners. */
+export function zoomedPanelRows(termRows: number, banners: number): number {
+  return Math.max(10, termRows - ZOOM_CHROME_ROWS - banners);
+}

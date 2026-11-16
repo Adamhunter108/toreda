@@ -12,6 +12,7 @@ export function Positions({
   closes,
   selected,
   showSpark,
+  sparkWidth = 16,
   sortLabel,
   focused,
 }: {
@@ -20,6 +21,8 @@ export function Positions({
   closes: Record<string, number[]>;
   selected: number;
   showSpark: boolean;
+  /** Wider when zoomed — see zoomedSparkWidth in ../layout. */
+  sparkWidth?: number;
   sortLabel: string;
   focused: boolean;
 }) {
@@ -79,7 +82,7 @@ export function Positions({
                   {live !== undefined ? "  ●" : "  ○"}
                 </Text>
                 {showSpark ? (
-                  <Text color={plCol}>{"  " + sparkline(closes[p.symbol] ?? [], 16)}</Text>
+                  <Text color={plCol}>{"  " + sparkline(closes[p.symbol] ?? [], sparkWidth)}</Text>
                 ) : null}
               </Box>
             );

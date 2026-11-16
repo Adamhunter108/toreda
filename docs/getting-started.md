@@ -140,9 +140,9 @@ npm run toreda -- scan          # ranked signals, rule breaches, untracked mover
 npm run dash                    # the live dashboard
 ```
 
-In the dashboard: `tab` cycles panels, `↑↓` moves, `enter` opens a position,
-`r` runs a scan, `t` changes theme, `q` quits. A wide terminal (100+ columns)
-gets a richer two-column layout.
+In the dashboard: `tab` cycles panels, `space` expands the highlighted one to
+full screen, `↑↓` moves, `enter` opens a position, `r` runs a scan, `t` changes
+theme, `q` quits. A wide terminal (100+ columns) gets a richer two-column layout.
 
 Prefer a bare `toreda` command to `npm run toreda --`? Run `npm link` once.
 

@@ -34,7 +34,7 @@ import {
 import { usePrices } from "./hooks/usePrices";
 import { useScanner } from "./hooks/useScanner";
 import { useScannerConfig } from "./hooks/useScannerConfig";
-import { shouldShowSparkline } from "./layout";
+import { shouldShowSparkline, zoomedPanelRows, zoomedSparkWidth } from "./layout";
 import { useTheme } from "./theme/ThemeContext";
 
 /** Equity chart periods cycled with `p` — [Alpaca period, label, timeframe]. */
@@ -52,6 +52,13 @@ const SORTS = [
   ["day", "day move"],
   ["symbol", "A–Z"],
 ] as const;
+
+/**
+ * The focusable sections, in Tab order. Space expands the focused one to full
+ * screen. The chart comes last so the original three keep their order.
+ */
+const SECTIONS = ["positions", "watchlist", "signals", "chart"] as const;
+type Section = (typeof SECTIONS)[number];
 
 function sortPositions(positions: Position[], key: string): Position[] {
   const arr = [...positions];
@@ -100,7 +107,13 @@ export function App() {
   const { exit } = useApp();
   const isTTY = process.stdin.isTTY === true;
   const [selected, setSelected] = useState(0);
-  const [focus, setFocus] = useState<"positions" | "watchlist" | "signals">("positions");
+  // DASH_ZOOM=<section> starts with that section focused and expanded.
+  const envZoom = SECTIONS.find((s) => s === process.env.DASH_ZOOM);
+  const [focus, setFocus] = useState<Section>(envZoom ?? "positions");
+  // Zoom always applies to the focused section, and Tab is ignored while zoomed,
+  // so a boolean is enough. Signals is the exception: its full-screen form is
+  // the existing SignalsView, so zooming it sets `signalsOpen` instead.
+  const [zoomed, setZoomed] = useState(envZoom !== undefined && envZoom !== "signals");
   const [wlCursor, setWlCursor] = useState(0);
   const [sigCursor, setSigCursor] = useState(0);
   const wlRows = wide ? 12 : 8;
@@ -118,7 +131,9 @@ export function App() {
 
   const [detailOpen, setDetailOpen] = useState(process.env.DASH_DETAIL === "1");
   const [watchlistOpen, setWatchlistOpen] = useState(process.env.DASH_WATCHLIST === "1");
-  const [signalsOpen, setSignalsOpen] = useState(process.env.DASH_SIGNALS === "1");
+  const [signalsOpen, setSignalsOpen] = useState(
+    process.env.DASH_SIGNALS === "1" || envZoom === "signals",
+  );
   const [settingsOpen, setSettingsOpen] = useState(process.env.DASH_SETTINGS === "1");
   // Trading is OFF by default. Disarmed, `o` is inert.
   const [armed, setArmed] = useState(process.env.DASH_ARMED === "1");
@@ -156,20 +171,30 @@ export function App() {
         if (key.escape || key.return || input === " ") setDetailOpen(false);
         return;
       }
-      if (key.tab) {
-        setFocus((f) =>
-          f === "positions" ? "watchlist" : f === "watchlist" ? "signals" : "positions",
-        );
+      // Space expands the focused section to full screen, and toggles back.
+      // Enter stays the drill-in to a single position — space is the section,
+      // enter is the row.
+      if (input === " ") {
+        if (focus === "signals") setSignalsOpen(true);
+        else setZoomed((z) => !z);
+        return;
+      }
+      if (zoomed && key.escape) {
+        setZoomed(false);
+        return;
+      }
+      if (key.tab && !zoomed) {
+        setFocus((f) => SECTIONS[(SECTIONS.indexOf(f) + 1) % SECTIONS.length]!);
       }
       if (key.downArrow) {
         if (focus === "watchlist") setWlCursor((c) => Math.min(sortedMovers.length - 1, c + 1));
         else if (focus === "signals") setSigCursor((c) => Math.min(sortedSignals.length - 1, c + 1));
-        else setSelected((s) => Math.min(positions.length - 1, s + 1));
+        else if (focus === "positions") setSelected((s) => Math.min(positions.length - 1, s + 1));
       }
       if (key.upArrow) {
         if (focus === "watchlist") setWlCursor((c) => Math.max(0, c - 1));
         else if (focus === "signals") setSigCursor((c) => Math.max(0, c - 1));
-        else setSelected((s) => Math.max(0, s - 1));
+        else if (focus === "positions") setSelected((s) => Math.max(0, s - 1));
       }
       if (input === "p") setPeriodIdx((i) => (i + 1) % PERIODS.length);
       if (input === "s") {
@@ -185,12 +210,16 @@ export function App() {
       // a lowercase key sits next to too many harmless ones.
       if (input === "A") setArmed((a) => !a);
       if (input === "o") {
+        // The chart has no symbol, so `o` is inert there rather than quietly
+        // ordering whichever position happens to be selected off-screen.
         const target =
           focus === "watchlist"
             ? sortedMovers[wlSel]?.symbol
             : focus === "signals"
               ? sortedSignals[sigSel]?.symbol
-              : positions[sel]?.symbol;
+              : focus === "positions"
+                ? positions[sel]?.symbol
+                : undefined;
         openOrder(target ?? "");
       }
       if (input === "h") setHistoryOpen(true);
@@ -198,7 +227,7 @@ export function App() {
         updateScanner((c) => ({ ...c, minConfidence: Math.max(1, c.minConfidence - 1) }));
       if (input === "]")
         updateScanner((c) => ({ ...c, minConfidence: Math.min(9, c.minConfidence + 1) }));
-      if ((key.return || input === " ") && focus === "positions" && positions.length > 0) {
+      if (key.return && focus === "positions" && positions.length > 0) {
         setDetailOpen(true);
       }
     },
@@ -301,11 +330,13 @@ export function App() {
           lastRun={scan.lastRun}
           minConf={scannerConfig.minConfidence}
           armed={armed}
+          cursor={sigSel}
+          onCursor={setSigCursor}
           onOrder={openOrder}
           onRefresh={scan.refresh}
           onClose={() => setSignalsOpen(false)}
         />
-        {statusBar(`↑↓ select${armed ? " · o order" : ""} · r rescan · esc back`)}
+        {statusBar(`↑↓ select${armed ? " · o order" : ""} · r rescan · space/esc back`)}
       </Box>
     );
   }
@@ -388,6 +419,71 @@ export function App() {
     </Box>
   ) : null;
 
+  // ── Zoomed section ────────────────────────────────────────────────────────
+  //
+  // The focused panel, given the whole terminal. Every key that works on it in
+  // the grid still works here — this is the same section, bigger, not a new
+  // screen. The banners stay: zoomed is still the live dashboard, and `o` still
+  // reaches the order ticket from it.
+
+  if (zoomed) {
+    const banners = (demoBanner ? 1 : 0) + (armedBanner ? 1 : 0);
+    const zoomRows = zoomedPanelRows(stdout?.rows ?? 40, banners);
+    const back = "space/esc back · q quit";
+    let panel: React.ReactNode;
+    let hint: string;
+
+    if (focus === "watchlist") {
+      panel = (
+        <Watchlist
+          movers={sortedMovers}
+          rows={Math.max(3, zoomRows - 5)} // border, title, and the two "more" lines
+          cursor={wlSel}
+          focused
+        />
+      );
+      hint = `↑↓ select${armed ? " · o order" : ""} · ${back}`;
+    } else if (focus === "chart") {
+      panel = (
+        <EquityChart
+          equity={equity}
+          availCols={cols}
+          maxWidth={cols}
+          periodLabel={periodLabel}
+          height={zoomRows - 3} // border and title
+          focused
+        />
+      );
+      hint = `p period · ${back}`;
+    } else {
+      const sparkWidth = zoomedSparkWidth(cols);
+      panel = (
+        <Positions
+          positions={positions}
+          prices={prices}
+          closes={closes}
+          selected={sel}
+          showSpark={sparkWidth > 0}
+          sparkWidth={sparkWidth}
+          sortLabel={sortLabel}
+          focused
+        />
+      );
+      hint = `↑↓ select · ⏎ detail · s sort${armed ? " · o order" : ""} · ${back}`;
+    }
+
+    return (
+      <Box flexDirection="column">
+        {headerBox}
+        {statBar}
+        {demoBanner}
+        {armedBanner}
+        {panel}
+        {statusBar(hint)}
+      </Box>
+    );
+  }
+
   // Show the sparkline only when the row genuinely fits — see src/ui/layout.ts
   // for why this is not the same question as "is the terminal wide".
   const showSpark = shouldShowSparkline(cols);
@@ -447,8 +543,8 @@ export function App() {
     : wlRows;
 
   const mainHint = wide
-    ? `${armed ? "o order · " : ""}A ${armed ? "disarm" : "arm"} · h history · g signals · c settings · w watchlist · t theme · q quit`
-    : "A o h g c t · tab q";
+    ? `${armed ? "o order · " : ""}space zoom · A ${armed ? "disarm" : "arm"} · h history · g signals · c settings · w watchlist · t theme · q quit`
+    : "A o h g c t · tab space q";
 
   return (
     <Box flexDirection="column">
@@ -478,6 +574,7 @@ export function App() {
               availCols={chartCols}
               periodLabel={periodLabel}
               height={chartRows}
+              focused={focus === "chart"}
             />
           </Box>
           <Box flexDirection="column" width={34}>
@@ -494,7 +591,12 @@ export function App() {
         <Box flexDirection="column">
           {positionsPanel}
           <AllocationBar positions={positions} prices={prices} />
-          <EquityChart equity={equity} availCols={chartCols} periodLabel={periodLabel} />
+          <EquityChart
+            equity={equity}
+            availCols={chartCols}
+            periodLabel={periodLabel}
+            focused={focus === "chart"}
+          />
           <Watchlist
             movers={sortedMovers}
             rows={wlRows}

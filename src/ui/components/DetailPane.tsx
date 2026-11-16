@@ -8,7 +8,7 @@ import { fmtQty, humanNum, signedUsd, snap0, usd } from "../format";
 import { useTheme } from "../theme/ThemeContext";
 
 /**
- * Opened with Enter or Space on a selected position. Shows cost detail, live
+ * Opened with Enter on a selected position. Shows cost detail, live
  * P&L, allocation, today's session stats for the stock, and a trend chart.
  */
 export function DetailPane({

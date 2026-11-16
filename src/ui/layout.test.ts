@@ -4,8 +4,12 @@ import {
   isWide,
   POSITION_ROW_WIDTH,
   positionsPanelWidth,
+  PANEL_CHROME,
   shouldShowSparkline,
   SPARK_WIDTH,
+  ZOOM_SPARK_MAX,
+  zoomedPanelRows,
+  zoomedSparkWidth,
 } from "./layout";
 
 test("the two-column layout starts at 100 columns", () => {
@@ -79,4 +83,33 @@ test("a narrow single-column terminal can still show the sparkline if it fits", 
 test("an absurdly narrow terminal does not produce a negative width", () => {
   assert.ok(positionsPanelWidth(10) <= 10);
   assert.equal(shouldShowSparkline(10), false);
+});
+
+// Zooming must not reintroduce the truncation bug: a wider sparkline is only
+// worth having if every number in the row still renders in full.
+test("the zoomed sparkline never pushes the row past the terminal", () => {
+  for (let cols = 10; cols <= 300; cols++) {
+    const w = zoomedSparkWidth(cols);
+    if (w === 0) continue;
+    assert.ok(
+      PANEL_CHROME + POSITION_ROW_WIDTH + 2 + w <= cols,
+      `at ${cols} columns a ${w}-wide sparkline overflows`,
+    );
+    assert.ok(w >= SPARK_WIDTH - 2, "never narrower than the grid's sparkline");
+    assert.ok(w <= ZOOM_SPARK_MAX);
+  }
+});
+
+test("zooming never hides a sparkline the grid would have shown", () => {
+  for (let cols = 40; cols <= 250; cols++) {
+    if (shouldShowSparkline(cols)) {
+      assert.ok(zoomedSparkWidth(cols) > 0, `zoom lost the sparkline at ${cols} columns`);
+    }
+  }
+});
+
+test("a zoomed panel gives back a row for each banner, with a legible floor", () => {
+  assert.equal(zoomedPanelRows(40, 0), 32);
+  assert.equal(zoomedPanelRows(40, 2), 30);
+  assert.equal(zoomedPanelRows(12, 2), 10);
 });
