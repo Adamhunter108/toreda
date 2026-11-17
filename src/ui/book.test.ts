@@ -10,6 +10,7 @@ const rules: RiskRules = {
   defaultMaxWeight: 0.25,
   trimProfitPct: 25,
   overrides: { CCC: { maxWeight: 0.5, decided: "2026-01-02", reason: "core holding" } },
+  stopOverrides: {},
 };
 
 function position(symbol: string, qty: number, avgEntry: number, price: number): Position {

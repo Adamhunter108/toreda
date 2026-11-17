@@ -23,6 +23,10 @@ For every position, state:
 - **Overrides** — if a symbol has a raised ceiling in `risk.json`, quote the
   recorded date and reason, and ask whether that reasoning still holds. An
   override with a stale rationale is drift wearing a decision's clothes.
+- **Stop exceptions** — if a symbol is held past the default stop under a
+  `stopOverrides` entry (`stopExceptions` in `scan --json`), quote its reason
+  and end date, say how many days remain, and ask whether the event it was
+  waiting for has happened. Once it has, the exception has done its job.
 
 Then, across the book:
 

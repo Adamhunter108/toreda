@@ -13,7 +13,8 @@ Structure the answer in this order, because it is the order that matters:
 
 **1. Rule breaches first.** Anything in `positionAlerts` — a stop hit, a
 position past its ceiling. These outrank every opportunity below them. If there
-are none, say so in one line and move on.
+are none, say so in one line and move on. Then anything in `stopExceptions`: a
+position held past the default stop by a dated exception, with its end date.
 
 **2. Where the book stands.** Total equity, today's move, buying power. Then any
 position worth a mention — an unusual move, something approaching its ceiling.

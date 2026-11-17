@@ -112,7 +112,11 @@ symbol, with deliberate, dated exceptions recorded in `config/risk.json`.
 
 **An override is a decision, not drift.** If the human wants to exceed a
 ceiling, the fix is to change the rule in `config/risk.json` with a date and a
-written reason — not to ignore the alert. A threshold nobody acts on is worse
+written reason — not to ignore the alert. The same goes for holding past a
+stop: a stop exception (`stopOverrides`) needs a date, a reason and, if it
+loosens the stop, an end date (`until`). After it, the default stop and its
+SELL alert come back. Positions held this way are listed in `stopExceptions`
+in `scan --json`; mention them along with the breaches. A threshold nobody acts on is worse
 than no threshold, because it trains them to skim the block where real stop-loss
 breaches appear.
 

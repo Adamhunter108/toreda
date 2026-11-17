@@ -14,6 +14,7 @@ const RULES: RiskRules = {
   defaultMaxWeight: 0.25,
   trimProfitPct: 25,
   overrides: {},
+  stopOverrides: {},
 };
 
 /** Bars rising steadily by `totalPct` across `days`, with flat volume. */

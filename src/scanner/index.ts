@@ -14,7 +14,7 @@ import { loadRiskRules, type RiskRules } from "../core/risk";
 import { loadScannerConfig, type ScannerConfig } from "../core/scanner-config";
 import { loadWatchlist } from "../core/watchlist";
 import { discoverCandidates } from "./discovery";
-import { reviewPositions } from "./review";
+import { heldUnderExceptions, reviewPositions } from "./review";
 import {
   deriveNewsSignals,
   derivePriceSignals,
@@ -161,6 +161,7 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
   ];
   const opportunities = rankSignals(raw, account, risk, cfg);
   const positionAlerts = reviewPositions(account, risk);
+  const stopExceptions = heldUnderExceptions(account, risk);
 
   let discovery = null;
   if ((options.discovery ?? true) && cfg.discovery.enabled) {
@@ -172,6 +173,7 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
   return {
     opportunities,
     positionAlerts,
+    stopExceptions,
     discovery,
     minConfidence: cfg.minConfidence,
     mode,

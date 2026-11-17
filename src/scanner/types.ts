@@ -42,6 +42,24 @@ export interface PositionAlert {
   detail: string;
 }
 
+/**
+ * A position past the default stop but held under a dated exception. Not a
+ * breach, since the human decided it, but never silent: it is shown with its
+ * reason and its end date until the date passes and the alert returns.
+ */
+export interface StopException {
+  symbol: string;
+  /** Unrealized P&L since entry, percent (−22.2 means −22.2%). */
+  plPct: number;
+  /** The default stop it is past. */
+  defaultPct: number;
+  /** The exception's stop, which it is not yet past. */
+  stopPct: number;
+  until: string;
+  decided: string;
+  reason: string;
+}
+
 export interface Candidate {
   symbol: string;
   name: string;
@@ -65,6 +83,8 @@ export interface DiscoveryResult {
 export interface ScanResult {
   opportunities: OpportunitySignal[];
   positionAlerts: PositionAlert[];
+  /** Positions held past the default stop under a dated exception. */
+  stopExceptions: StopException[];
   discovery: DiscoveryResult | null;
   minConfidence: number;
   mode: string;

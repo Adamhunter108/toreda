@@ -1,17 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   DEFAULT_RISK_RULES,
   describeRuleChanges,
   hasOverride,
+  lapsedReason,
   loadRiskRules,
   maxWeightFor,
   type RiskRules,
+  type StopOverride,
+  stopFor,
 } from "./risk";
-import { defaultConfigFile } from "./paths";
+import { configDir, configFile, defaultConfigFile } from "./paths";
 
 const rules: RiskRules = {
   stopLossPct: -7,
@@ -20,6 +23,7 @@ const rules: RiskRules = {
   overrides: {
     MSFT: { maxWeight: 0.4, decided: "2026-01-15", reason: "long-term holding" },
   },
+  stopOverrides: {},
 };
 
 test("an unlisted symbol gets the default ceiling", () => {
@@ -42,8 +46,10 @@ test("the shipped defaults carry no personal overrides", () => {
   // position-sizing decisions.
   const shipped = JSON.parse(readFileSync(defaultConfigFile("risk.json"), "utf8")) as {
     overrides: Record<string, unknown>;
+    stopOverrides: Record<string, unknown>;
   };
   assert.deepEqual(shipped.overrides, {});
+  assert.deepEqual(shipped.stopOverrides, {});
 });
 
 test("the shipped defaults match the built-in constants", () => {
@@ -78,6 +84,7 @@ test("rule changes are described in words, one line each", () => {
     defaultMaxWeight: 0.3,
     trimProfitPct: 25,
     overrides: { SHOP: { maxWeight: 0.35, decided: "2026-01-20", reason: "conviction" } },
+    stopOverrides: {},
   };
   assert.deepEqual(describeRuleChanges(rules, after), [
     "stop loss −7% → −10%",
@@ -89,6 +96,84 @@ test("rule changes are described in words, one line each", () => {
 
 test("an unchanged rule set describes no changes", () => {
   assert.deepEqual(describeRuleChanges(rules, structuredClone(rules)), []);
+});
+
+// ── Stop exceptions ─────────────────────────────────────────────────────────
+
+const withStop = (o: Partial<StopOverride>): RiskRules => ({
+  ...rules,
+  stopOverrides: {
+    XYZ: { stopLossPct: -30, decided: "2026-02-02", until: "2026-02-06", reason: "earnings", ...o },
+  },
+});
+
+test("a dated exception sets the symbol's stop through its end date", () => {
+  const r = withStop({});
+  assert.equal(stopFor("XYZ", r, "2026-02-02").pct, -30);
+  assert.equal(stopFor("xyz", r, "2026-02-06").pct, -30, "inclusive, and case-insensitive");
+  assert.equal(stopFor("XYZ", r, "2026-02-06").exception?.reason, "earnings");
+  assert.equal(stopFor("AMD", r, "2026-02-02").pct, -7, "other symbols keep the default");
+});
+
+test("after its end date the exception lapses and the default is back", () => {
+  const stop = stopFor("XYZ", withStop({}), "2026-02-07");
+  assert.equal(stop.pct, -7);
+  assert.equal(stop.exception, null);
+  assert.equal(stop.lapsed?.until, "2026-02-06");
+  assert.equal(lapsedReason(stop.lapsed!), "ran out on 2026-02-06");
+});
+
+test("a looser stop needs an end date; a tighter one does not", () => {
+  const open = stopFor("XYZ", withStop({ until: "" }), "2026-02-02");
+  assert.equal(open.pct, -7, "an open-ended loosening does not apply");
+  assert.match(lapsedReason(open.lapsed!), /no end date/);
+  assert.equal(stopFor("XYZ", withStop({ until: "someday" }), "2026-02-02").pct, -7);
+  assert.equal(stopFor("XYZ", withStop({ stopLossPct: -4, until: "" }), "2030-01-01").pct, -4);
+});
+
+test("stop exceptions load from the file, and a non-loss stop is dropped", () => {
+  const home = mkdtempSync(join(tmpdir(), "toreda-risk-"));
+  const prev = process.env.TOREDA_HOME;
+  process.env.TOREDA_HOME = home;
+  try {
+    mkdirSync(configDir(), { recursive: true });
+    writeFileSync(
+      configFile("risk.json"),
+      JSON.stringify({
+        stopLossPct: -10,
+        stopOverrides: {
+          xyz: { stopLossPct: -30, decided: "2026-02-02", until: "2026-02-06", reason: "earnings" },
+          AMD: { stopLossPct: 5, decided: "2026-02-02", until: "2026-02-06", reason: "typo" },
+          NET: { decided: "2026-02-02" },
+        },
+      }),
+    );
+    const loaded = loadRiskRules();
+    assert.deepEqual(Object.keys(loaded.stopOverrides), ["XYZ"]);
+    assert.deepEqual(loaded.stopOverrides.XYZ, {
+      stopLossPct: -30,
+      decided: "2026-02-02",
+      until: "2026-02-06",
+      reason: "earnings",
+    });
+  } finally {
+    if (prev === undefined) delete process.env.TOREDA_HOME;
+    else process.env.TOREDA_HOME = prev;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("stop exception changes are described in words, with their end dates", () => {
+  const added = withStop({});
+  assert.deepEqual(describeRuleChanges(rules, added), [
+    "XYZ stop set to −30% until 2026-02-06 (exception: earnings)",
+  ]);
+  assert.deepEqual(describeRuleChanges(added, withStop({ until: "2026-02-10" })), [
+    "XYZ stop −30% until 2026-02-06 → −30% until 2026-02-10 (exception: earnings)",
+  ]);
+  assert.deepEqual(describeRuleChanges(added, rules), [
+    "XYZ stop exception removed — back to the −7% default",
+  ]);
 });
 
 test("a stop loss is expressed as a negative percent", () => {

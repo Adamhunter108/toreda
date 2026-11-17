@@ -395,6 +395,7 @@ export function demoScanResult(): unknown {
           `Trimming to the ceiling frees that as buying power.`,
       },
     ],
+    stopExceptions: [],
     discovery: {
       candidates: [
         {

@@ -163,12 +163,14 @@ function configFileChecks(): Check[] {
 
   const risk = loadRiskRules();
   const overrideCount = Object.keys(risk.overrides).length;
+  const stopCount = Object.keys(risk.stopOverrides).length;
   checks.push({
     status: "ok",
     label: "Risk rules",
     detail:
       `stop ${risk.stopLossPct}%, max ${(risk.defaultMaxWeight * 100).toFixed(0)}% per symbol` +
-      (overrideCount ? `, ${overrideCount} override${overrideCount > 1 ? "s" : ""}` : ""),
+      (overrideCount ? `, ${overrideCount} override${overrideCount > 1 ? "s" : ""}` : "") +
+      (stopCount ? `, ${stopCount} stop exception${stopCount > 1 ? "s" : ""}` : ""),
   });
 
   const scanner = loadScannerConfig();

@@ -8,10 +8,16 @@
 // about that symbol today.
 
 import type { RiskRules } from "../core/risk";
-import { maxWeightFor } from "../core/risk";
-import type { AccountState, PositionAlert } from "./types";
+import { lapsedReason, maxWeightFor, stopFor } from "../core/risk";
+import { easternDate } from "../core/transfers";
+import type { AccountState, PositionAlert, StopException } from "./types";
 
-export function reviewPositions(account: AccountState, risk: RiskRules): PositionAlert[] {
+/** `today` is a New York date (YYYY-MM-DD), for stop exceptions' end dates. */
+export function reviewPositions(
+  account: AccountState,
+  risk: RiskRules,
+  today: string = easternDate(new Date()),
+): PositionAlert[] {
   const alerts: PositionAlert[] = [];
 
   for (const [symbol, position] of Object.entries(account.positions)) {
@@ -19,14 +25,21 @@ export function reviewPositions(account: AccountState, risk: RiskRules): Positio
     const weightPct = position.weight * 100;
 
     // Boundary is inclusive: at exactly the stop, the rule has been reached.
-    if (plPct <= risk.stopLossPct) {
+    // The stop is this symbol's own while a dated exception is in force.
+    const stop = stopFor(symbol, risk, today);
+    if (plPct <= stop.pct) {
+      const { exception, lapsed } = stop;
       alerts.push({
         symbol,
         rule: "STOP LOSS",
         action: "SELL",
         detail:
-          `${plPct.toFixed(1)}% from entry — at or past the ${risk.stopLossPct}% stop. ` +
-          `The rule says sell, not reassess.`,
+          `${plPct.toFixed(1)}% from entry — at or past the ${stop.pct}% stop` +
+          (exception ? ` you set for ${symbol}${exception.until ? ` until ${exception.until}` : ""}` : "") +
+          (lapsed ? `; your ${lapsed.stopLossPct}% exception ${lapsedReason(lapsed)}` : "") +
+          `. The rule says sell, not reassess.` +
+          (exception ? `\n  (Exception decided ${exception.decided || "undated"}: ${exception.reason})` : "") +
+          (lapsed ? `\n  (It was decided ${lapsed.decided || "undated"}: ${lapsed.reason})` : ""),
       });
     }
 
@@ -55,4 +68,34 @@ export function reviewPositions(account: AccountState, risk: RiskRules): Positio
 
 function rank(alert: PositionAlert): number {
   return alert.rule === "STOP LOSS" ? 0 : 1;
+}
+
+/**
+ * Positions past the default stop that a dated exception is holding open.
+ *
+ * Without this list an exception would be invisible: the breach disappears
+ * and nothing replaces it. A decision to hold through a loss stays on screen,
+ * with its reason and end date, for as long as it is doing any work.
+ */
+export function heldUnderExceptions(
+  account: AccountState,
+  risk: RiskRules,
+  today: string = easternDate(new Date()),
+): StopException[] {
+  const held: StopException[] = [];
+  for (const [symbol, position] of Object.entries(account.positions)) {
+    const plPct = position.unrealizedPlPct * 100;
+    const { pct, exception } = stopFor(symbol, risk, today);
+    if (!exception || plPct > risk.stopLossPct || plPct <= pct) continue;
+    held.push({
+      symbol,
+      plPct,
+      defaultPct: risk.stopLossPct,
+      stopPct: pct,
+      until: exception.until,
+      decided: exception.decided,
+      reason: exception.reason,
+    });
+  }
+  return held.sort((a, b) => a.plPct - b.plPct);
 }

@@ -8,7 +8,14 @@ import { appendJournal, formatRulesEntry } from "../core/journal";
 import { describeRuleChanges, type RiskRules } from "../core/risk";
 import { mutedProps } from "../core/theme";
 import { loadWatchlist } from "../core/watchlist";
-import { bookAccountState, bookAlerts, breachesBySymbol, markBook, sortBook } from "./book";
+import {
+  bookAccountState,
+  bookAlerts,
+  bookExceptions,
+  breachesBySymbol,
+  markBook,
+  sortBook,
+} from "./book";
 import { DetailPane } from "./components/DetailPane";
 import { EquityChart } from "./components/EquityChart";
 import { Header } from "./components/Header";
@@ -109,6 +116,8 @@ export function App() {
   );
   const alerts = useMemo(() => bookAlerts(book, risk), [book, risk]);
   const breaches = useMemo(() => breachesBySymbol(alerts), [alerts]);
+  // Past the default stop but held under a dated exception: shown, not alerted.
+  const excepted = useMemo(() => bookExceptions(book, risk), [book, risk]);
   const held = useMemo(() => new Set(rawPositions.map((p) => p.symbol)), [rawPositions]);
 
   const [sortIdx, setSortIdx] = useState(0);
@@ -345,13 +354,19 @@ export function App() {
   const bannerLines = (demoBanner ? 1 : 0) + (armedBanner ? 1 : 0);
 
   const rulesStrip = (
-    <RulesStrip alerts={alerts} rules={risk} positionCount={rawPositions.length} />
+    <RulesStrip
+      alerts={alerts}
+      held={excepted}
+      rules={risk}
+      positionCount={rawPositions.length}
+    />
   );
   const cash =
     book.known && book.equity > 0 ? { amount: book.cash, share: book.cash / book.equity } : null;
   // Banners and the rules strip span the full width above the panels, so they
   // come out of the row budget before any panel is sized.
-  const extraLines = bannerLines + rulesStripHeight(alerts === null ? null : alerts.length);
+  const extraLines =
+    bannerLines + rulesStripHeight(alerts === null ? null : alerts.length + excepted.length);
 
   // ── Full-screen views ─────────────────────────────────────────────────────
 

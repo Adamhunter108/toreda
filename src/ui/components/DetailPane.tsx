@@ -23,6 +23,7 @@ export function DetailPane({
   row: BookRow;
   closes: number[];
   stats: SymbolStats | null;
+  /** The DEFAULT stop; the row carries this symbol's own (`r.stopPct`). */
   stopLossPct: number;
   breach: { stop: boolean; ceiling: boolean } | undefined;
   availCols: number;
@@ -92,13 +93,27 @@ export function DetailPane({
           <Text color={breach?.stop ? t.negative : undefined} bold={breach?.stop}>
             {usd(r.stopPrice)}/sh
           </Text>
-          <Text {...mutedProps(t)}>{` · ${stopLossPct}% from entry`}</Text>
+          <Text {...mutedProps(t)}>
+            {` · ${r.stopPct}% from entry`}
+            {r.stopException
+              ? ` (exception${r.stopException.until ? ` until ${r.stopException.until}` : ""})`
+              : ""}
+          </Text>
           {breach?.stop ? (
             <Text color={t.negative} bold>
               {"  at or past it — the rule says sell"}
             </Text>
+          ) : r.stopException && r.plPct <= stopLossPct ? (
+            <Text color={t.warning}>{`  past your ${stopLossPct}% default — held by the exception`}</Text>
           ) : null}
         </Row>
+        {r.stopException ? (
+          <Row label="Why">
+            <Text {...mutedProps(t)} wrap="truncate-end">
+              {`decided ${r.stopException.decided || "undated"} · ${r.stopException.reason || "no reason recorded"}`}
+            </Text>
+          </Row>
+        ) : null}
       </Box>
 
       <Box marginTop={1} flexDirection="column">

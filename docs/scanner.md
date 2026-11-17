@@ -164,13 +164,25 @@ rarely the noisiest name.
 
 Two rules, from `config/risk.json`:
 
-- **STOP LOSS** — at or past `stopLossPct` (default −7%) from entry. Boundary
-  inclusive: exactly −7% trips it.
+- **STOP LOSS** — at or past `stopLossPct` (default −7%) from entry, or the
+  symbol's own stop while a stop exception is in force. Boundary inclusive:
+  exactly −7% trips it.
 - **CONCENTRATION** — above its ceiling, either `defaultMaxWeight` (25%) or a
   per-symbol override.
 
-Stop-loss breaches sort above concentration ones. An override raises the *size*
-ceiling only — the stop applies to every position without exception.
+Stop-loss breaches sort above concentration ones. A ceiling override raises the
+*size* ceiling only.
+
+**Stop exceptions** (`stopOverrides`) set one symbol's stop, with a date and a
+reason. One that *loosens* the stop must have an end date (`until`, inclusive)
+and applies only through it; the day after, the default stop and its SELL alert
+return, and the alert says the exception ran out. A looser stop with no end date
+does not apply at all. A tighter stop may be open-ended.
+
+A position past the default stop but held by an exception is not a breach, but
+it is never silent: `scan` lists it under "Held past your stop" (and in
+`stopExceptions` in `--json`), and the dashboard's rules strip shows it in the
+warning colour with its end date and reason.
 
 ---
 

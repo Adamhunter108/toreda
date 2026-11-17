@@ -2,7 +2,7 @@
 
 import type { NewsItem } from "../core/market-data";
 import type { RiskRules } from "../core/risk";
-import { maxWeightFor } from "../core/risk";
+import { maxWeightFor, stopFor } from "../core/risk";
 import type { ScannerConfig } from "../core/scanner-config";
 import { score } from "./score";
 import type { SocialPost } from "./sources/stocktwits";
@@ -330,10 +330,11 @@ export function applyPositionContext(
 
   // The stop rule. Note this only fires for symbols that produced a signal;
   // reviewPositions() is what guarantees EVERY position gets checked.
-  if (plPct <= risk.stopLossPct) {
+  const stop = stopFor(signal.symbol, risk).pct;
+  if (plPct <= stop) {
     out.action = "sell";
     out.catalysts.push(
-      `Position is ${plPct.toFixed(1)}% — at or past the ${risk.stopLossPct}% stop-loss rule`,
+      `Position is ${plPct.toFixed(1)}% — at or past the ${stop}% stop-loss rule`,
     );
   }
   return out;

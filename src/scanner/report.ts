@@ -5,7 +5,13 @@
 // own more, and burying a stop-loss breach below eight buy ideas inverts that.
 
 import { c, compactMoney, out, pctRaw } from "../cli/format";
-import type { DiscoveryResult, OpportunitySignal, PositionAlert, ScanResult } from "./types";
+import type {
+  DiscoveryResult,
+  OpportunitySignal,
+  PositionAlert,
+  ScanResult,
+  StopException,
+} from "./types";
 
 function actionColor(action: string): (s: string) => string {
   const a = action.toLowerCase();
@@ -34,6 +40,21 @@ export function printPositionReview(alerts: PositionAlert[]): void {
     for (const line of alert.detail.split("\n")) out(`  ${line}`);
   }
   out("", c.dim("  These are your own rules, not market predictions."));
+}
+
+/** Positions held past the default stop under a dated exception. */
+export function printStopExceptions(held: StopException[]): void {
+  if (held.length === 0) return;
+  out("", c.bold("◆  Held past your stop — dated exceptions"), c.dim("─".repeat(64)));
+  for (const h of held) {
+    out(
+      "",
+      `${c.bold(h.symbol)} — ${c.yellow(`${h.plPct.toFixed(1)}% from entry, past the ${h.defaultPct}% stop`)}`,
+      `  Exception to ${h.stopPct}%${h.until ? ` until ${h.until}` : ""} ` +
+        `(decided ${h.decided || "undated"}): ${h.reason}`,
+    );
+  }
+  out("", c.dim("  When an exception ends, the default stop and its SELL alert come back."));
 }
 
 export function printSignals(result: ScanResult): void {
@@ -122,6 +143,7 @@ export function printScan(result: ScanResult): void {
   }
 
   printPositionReview(result.positionAlerts);
+  printStopExceptions(result.stopExceptions ?? []);
   printSignals(result);
 
   // Discovery runs last so the curated universe stays the headline and unvetted

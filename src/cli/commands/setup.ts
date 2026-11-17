@@ -286,6 +286,7 @@ async function stepRisk(): Promise<RiskRules> {
     defaultMaxWeight: maxWeightPct / 100,
     trimProfitPct,
     overrides: {},
+    stopOverrides: {},
   };
 }
 

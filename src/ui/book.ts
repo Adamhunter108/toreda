@@ -12,11 +12,17 @@
 // definition `reviewPositions`, `toreda portfolio --json` and the scanner use.
 
 import { positionDay } from "../core/alpaca";
-import { hasOverride, maxWeightFor, type RiskRules } from "../core/risk";
+import {
+  hasOverride,
+  maxWeightFor,
+  type RiskRules,
+  type StopOverride,
+  stopFor,
+} from "../core/risk";
 import { type CashFlows, dayChange } from "../core/transfers";
 import type { Account, Position } from "../core/types";
-import { reviewPositions } from "../scanner/review";
-import type { AccountState, PositionAlert } from "../scanner/types";
+import { heldUnderExceptions, reviewPositions } from "../scanner/review";
+import type { AccountState, PositionAlert, StopException } from "../scanner/types";
 
 export interface BookRow {
   symbol: string;
@@ -49,6 +55,10 @@ export interface BookRow {
   override: boolean;
   /** The price at which the stop-loss rule is reached. */
   stopPrice: number;
+  /** This symbol's stop today: the default, or a dated exception's. */
+  stopPct: number;
+  /** The exception in force, if any. */
+  stopException: StopOverride | null;
 }
 
 export interface Book {
@@ -107,6 +117,7 @@ export function markBook(
     const value = p.qty * price;
     const pl = value - p.costBasis;
     const day = positionDay(p, price);
+    const stop = stopFor(p.symbol, risk);
     return {
       symbol: p.symbol,
       qty: p.qty,
@@ -123,7 +134,9 @@ export function markBook(
       weight: known && equity > 0 ? value / equity : null,
       ceiling: maxWeightFor(p.symbol, risk),
       override: hasOverride(p.symbol, risk),
-      stopPrice: p.avgEntry * (1 + risk.stopLossPct / 100),
+      stopPrice: p.avgEntry * (1 + stop.pct / 100),
+      stopPct: stop.pct,
+      stopException: stop.exception,
     };
   });
 
@@ -171,6 +184,12 @@ export function bookAccountState(book: Book): AccountState | null {
 export function bookAlerts(book: Book, risk: RiskRules): PositionAlert[] | null {
   const state = bookAccountState(book);
   return state ? reviewPositions(state, risk) : null;
+}
+
+/** Positions held past the default stop under a dated exception, live. */
+export function bookExceptions(book: Book, risk: RiskRules): StopException[] {
+  const state = bookAccountState(book);
+  return state ? heldUnderExceptions(state, risk) : [];
 }
 
 /** symbol → which rules it breaches, for highlighting cells. */

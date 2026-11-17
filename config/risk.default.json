@@ -24,14 +24,28 @@
     "    }",
     "  }",
     "",
-    "An override raises the SIZE ceiling only. The stop loss applies to every",
-    "position without exception — conviction about a company is not a reason to",
-    "tolerate an open loss."
+    "An override raises the SIZE ceiling only. The stop loss is changed per",
+    "symbol only by a stop exception, and an exception that LOOSENS the stop",
+    "must have an end date (`until`, inclusive). Conviction about a company is",
+    "not a reason to tolerate an open loss indefinitely; holding through a known",
+    "event, like earnings, is a decision with a horizon. After `until`, the",
+    "default stop and its SELL alert come back. A looser stop with no end date",
+    "does not apply. A TIGHTER stop may be open-ended (leave `until` empty).",
+    "",
+    "  \"stopOverrides\": {",
+    "    \"MSFT\": {",
+    "      \"stopLossPct\": -15,",
+    "      \"decided\": \"2026-02-02\",",
+    "      \"until\": \"2026-02-06\",",
+    "      \"reason\": \"Holding through the earnings report; reassess on the results.\"",
+    "    }",
+    "  }"
   ],
 
   "stopLossPct": -7,
   "defaultMaxWeight": 0.25,
   "trimProfitPct": 25,
 
-  "overrides": {}
+  "overrides": {},
+  "stopOverrides": {}
 }
