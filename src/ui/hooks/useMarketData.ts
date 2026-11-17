@@ -11,6 +11,7 @@ import {
   type Snapshot,
   type SymbolStats,
 } from "../../core/market-data";
+import { EMPTY_HISTORY, type EquityHistory } from "../../core/performance";
 
 /**
  * Run `fetcher` now and on an interval, keeping the last good value.
@@ -65,10 +66,14 @@ export function useClock(pollMs = 60_000): boolean | null {
   );
 }
 
-export function useEquityHistory(period = "1M", timeframe = "1D", pollMs = 300_000): number[] {
-  return usePolled<number[]>(
+export function useEquityHistory(
+  period = "1M",
+  timeframe = "1D",
+  pollMs = 300_000,
+): EquityHistory {
+  return usePolled<EquityHistory>(
     () => getEquityHistory(period, timeframe),
-    [],
+    EMPTY_HISTORY,
     pollMs,
     [period, timeframe, pollMs],
   );

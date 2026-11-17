@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildSummary, buildTable, COLUMN_MEANINGS, headerFor } from "./build";
+import { NO_FLOWS } from "../core/transfers";
 import type { Account, Position } from "../core/types";
 
 const account: Account = {
@@ -24,6 +25,7 @@ function position(over: Partial<Position> = {}): Position {
     marketValue: 128,
     unrealizedPl: 28,
     unrealizedPlPct: 0.28,
+    dayPl: 1.66,
     changeToday: 0.0132,
     prevClose: 126,
     currentPrice: 128,
@@ -32,7 +34,7 @@ function position(over: Partial<Position> = {}): Position {
 }
 
 test("the summary carries equity, day change, and buying power", () => {
-  const summary = buildSummary(account);
+  const summary = buildSummary(account, NO_FLOWS);
   assert.match(summary, /Portfolio \$1,032\.45/);
   assert.match(summary, /BP \$3\.45/);
 });
@@ -40,18 +42,32 @@ test("the summary carries equity, day change, and buying power", () => {
 // A bare "-0.19" gets read back as a percentage, which misreads the day by a
 // factor of a hundred. The dollar sign is doing real work.
 test("the day change carries a dollar sign as well as a percent", () => {
-  const summary = buildSummary(account);
-  assert.match(summary, /Day \+\$8\.14 \(\+0\.79%\)/);
+  const summary = buildSummary(account, NO_FLOWS);
+  assert.match(summary, /Day \+\$8\.14 \(\+0\.79%\) \| BP/);
 });
 
 test("a losing day renders its sign correctly on both figures", () => {
-  const summary = buildSummary({ ...account, equity: 1000, lastEquity: 1100 });
+  const summary = buildSummary({ ...account, equity: 1000, lastEquity: 1100 }, NO_FLOWS);
   assert.match(summary, /Day -\$100\.00 \(-9\.09%\)/);
 });
 
 test("a zero last-equity does not produce NaN or Infinity", () => {
-  const summary = buildSummary({ ...account, lastEquity: 0 });
+  const summary = buildSummary({ ...account, lastEquity: 0 }, NO_FLOWS);
   assert.ok(!/NaN|Infinity/.test(summary), summary);
+});
+
+// Without the flows, a $1,000 deposit on a losing day reads as a +24% day.
+test("a deposit is taken out of the day change, and said so", () => {
+  const summary = buildSummary(
+    { ...account, equity: 4960, lastEquity: 4000 },
+    { deposits: 1000, withdrawals: 0, net: 1000 },
+  );
+  assert.match(summary, /Day -\$40\.00 \(-1\.00%\) excl\. \+\$1,000 deposited \| BP/);
+});
+
+test("unchecked transfers are flagged rather than passed off as a clean day", () => {
+  const summary = buildSummary({ ...account, equity: 4960, lastEquity: 4000 }, null);
+  assert.match(summary, /Day \+\$960\.00 \(\+24\.00%\) may include transfers/);
 });
 
 // ── The table ───────────────────────────────────────────────────────────────

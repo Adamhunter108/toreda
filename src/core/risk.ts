@@ -74,3 +74,52 @@ export function maxWeightFor(symbol: string, rules: RiskRules): number {
 export function hasOverride(symbol: string, rules: RiskRules): boolean {
   return rules.overrides[symbol.toUpperCase()] !== undefined;
 }
+
+/** A signed percent with a real minus sign: −7%, +25%, 30%. */
+function pct(n: number, signed = false): string {
+  const r = Math.round(n * 100) / 100;
+  if (r < 0) return `−${Math.abs(r)}%`;
+  return `${signed && r > 0 ? "+" : ""}${r}%`;
+}
+
+/** A weight fraction as a percent: 0.25 → "25%". */
+function weightPct(w: number): string {
+  return pct(w * 100);
+}
+
+/**
+ * What changed between two rule sets, one line per change, in words a
+ * journal reader six months from now can follow without opening the JSON.
+ */
+export function describeRuleChanges(before: RiskRules, after: RiskRules): string[] {
+  const out: string[] = [];
+  if (before.stopLossPct !== after.stopLossPct) {
+    out.push(`stop loss ${pct(before.stopLossPct)} → ${pct(after.stopLossPct)}`);
+  }
+  if (before.defaultMaxWeight !== after.defaultMaxWeight) {
+    out.push(
+      `default ceiling ${weightPct(before.defaultMaxWeight)} → ${weightPct(after.defaultMaxWeight)}`,
+    );
+  }
+  if (before.trimProfitPct !== after.trimProfitPct) {
+    out.push(
+      `trim trigger ${pct(before.trimProfitPct, true)} → ${pct(after.trimProfitPct, true)}`,
+    );
+  }
+
+  const symbols = [...new Set([...Object.keys(before.overrides), ...Object.keys(after.overrides)])];
+  for (const sym of symbols.sort()) {
+    const a = before.overrides[sym];
+    const b = after.overrides[sym];
+    if (a && !b) {
+      out.push(`${sym} override removed — back to the ${weightPct(after.defaultMaxWeight)} default`);
+    } else if (!a && b) {
+      out.push(`${sym} ceiling set to ${weightPct(b.maxWeight)} (override: ${b.reason})`);
+    } else if (a && b && (a.maxWeight !== b.maxWeight || a.reason !== b.reason)) {
+      out.push(
+        `${sym} ceiling ${weightPct(a.maxWeight)} → ${weightPct(b.maxWeight)} (override: ${b.reason})`,
+      );
+    }
+  }
+  return out;
+}

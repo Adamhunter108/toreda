@@ -1,5 +1,8 @@
-import { test } from "node:test";
+import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { loadWatchlist } from "./watchlist";
 import { loadScannerConfig, DEFAULT_SCANNER_CONFIG } from "./scanner-config";
 import { loadUiConfig } from "./ui-config";
@@ -8,6 +11,22 @@ import { THEMES } from "./theme";
 // A fresh clone has no config/*.json — only the shipped config/*.default.json.
 // Everything must load from those without the user having run setup yet, or the
 // first thing a new user sees is a crash.
+//
+// So these tests run against an EMPTY data home. Without that they read the
+// developer's own tuned config/*.json, and failed the moment anyone picked a
+// sector focus in the dashboard — testing their settings, not the fresh clone.
+let home = "";
+let previous: string | undefined;
+before(() => {
+  previous = process.env.TOREDA_HOME;
+  home = mkdtempSync(join(tmpdir(), "toreda-fresh-"));
+  process.env.TOREDA_HOME = home;
+});
+after(() => {
+  if (previous === undefined) delete process.env.TOREDA_HOME;
+  else process.env.TOREDA_HOME = previous;
+  rmSync(home, { recursive: true, force: true });
+});
 
 test("the watchlist loads from the shipped default in a fresh clone", () => {
   const wl = loadWatchlist();

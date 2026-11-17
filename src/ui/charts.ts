@@ -21,6 +21,11 @@ export function sparkline(values: number[], width?: number): string {
  * 2W×4H "pixel" canvas — which is how a terminal draws a smooth curve. Returns
  * `height` strings, top row first. With `fill`, every dot BELOW the curve is lit
  * too, turning the line into a filled area (the base for a gradient chart).
+ *
+ * Between data points the curve is interpolated linearly — a line chart joins
+ * its points. Sampling the nearest point instead turned a month of 21 daily
+ * closes, stretched across a zoomed terminal, into a staircase of flat steps
+ * that implied the account sat still for days at a time.
  */
 export function brailleChart(
   values: number[],
@@ -50,13 +55,24 @@ export function brailleChart(
       grid[idx] = (grid[idx] ?? 0) | bitAt(x % 2, yDot % 4);
     };
 
+    let prevY: number | null = null;
     for (let x = 0; x < dotW; x++) {
-      const i = Math.round((x / Math.max(1, dotW - 1)) * (values.length - 1));
-      const value = values[i] ?? min;
+      const pos = (x / Math.max(1, dotW - 1)) * (values.length - 1);
+      const i0 = Math.floor(pos);
+      const i1 = Math.min(values.length - 1, i0 + 1);
+      const f = pos - i0;
+      const value = (values[i0] ?? min) * (1 - f) + (values[i1] ?? min) * f;
       const norm = (value - min) / range;
       const yDot = Math.round((1 - norm) * (dotH - 1)); // invert: high = top
-      if (fill) for (let y = yDot; y < dotH; y++) lit(x, y);
-      else lit(x, yDot);
+      if (fill) {
+        for (let y = yDot; y < dotH; y++) lit(x, y);
+      } else {
+        // Join to the previous column, so a steep move draws a line rather than
+        // two dots with empty space between them.
+        const from = prevY ?? yDot;
+        for (let y = Math.min(from, yDot); y <= Math.max(from, yDot); y++) lit(x, y);
+      }
+      prevY = yDot;
     }
   }
 

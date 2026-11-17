@@ -54,21 +54,58 @@ export async function getPositions(): Promise<Position[]> {
   if (!Array.isArray(arr)) {
     throw new Error(`Alpaca /v2/positions did not return a list: ${JSON.stringify(arr).slice(0, 200)}`);
   }
-  return arr.map((raw): Position => {
-    const p = raw as Record<string, unknown>;
-    return {
-      symbol: String(p.symbol),
-      qty: num(p.qty),
-      avgEntry: num(p.avg_entry_price),
-      costBasis: num(p.cost_basis),
-      marketValue: num(p.market_value),
-      unrealizedPl: num(p.unrealized_pl),
-      unrealizedPlPct: num(p.unrealized_plpc),
-      changeToday: num(p.change_today),
-      prevClose: num(p.lastday_price),
-      currentPrice: num(p.current_price),
-    };
-  });
+  return arr.map((raw) => parsePosition(raw as Record<string, unknown>));
+}
+
+/**
+ * Today's gain or loss on a position, optionally re-marked to a live price.
+ *
+ * The basis is what the position stood at when your day began: shares held
+ * overnight at the previous close, plus what you paid for shares bought today.
+ * That is `value − dayPl`, whichever way the position was built.
+ */
+export function positionDay(
+  p: Position,
+  price = p.currentPrice,
+): { amount: number; pct: number } {
+  const amount = p.dayPl + p.qty * (price - p.currentPrice);
+  const basis = p.qty * p.currentPrice - p.dayPl;
+  return { amount, pct: basis ? amount / Math.abs(basis) : 0 };
+}
+
+/**
+ * One entry of `/v2/positions`.
+ *
+ * Today's figures come from `unrealized_intraday_pl`, not `change_today`.
+ * `change_today` is the stock's move since the previous close; on a position
+ * opened today it charges you for a drop that happened before you bought.
+ * Shares bought at $95 after a $100 close, now at $96, would show DAY −4%
+ * while up 1% on what was paid.
+ */
+export function parsePosition(p: Record<string, unknown>): Position {
+  const qty = num(p.qty);
+  const currentPrice = num(p.current_price);
+  const prevClose = num(p.lastday_price);
+  const intraday = Number(p.unrealized_intraday_pl);
+  const hasIntraday = p.unrealized_intraday_pl != null && p.unrealized_intraday_pl !== "";
+  const position: Position = {
+    symbol: String(p.symbol),
+    qty,
+    avgEntry: num(p.avg_entry_price),
+    costBasis: num(p.cost_basis),
+    marketValue: num(p.market_value),
+    unrealizedPl: num(p.unrealized_pl),
+    unrealizedPlPct: num(p.unrealized_plpc),
+    // Without Alpaca's figure, fall back to the stock's move: right for shares
+    // held overnight, which is every share on any day you did not buy.
+    dayPl:
+      hasIntraday && Number.isFinite(intraday) ? intraday : qty * (currentPrice - prevClose),
+    changeToday: 0,
+    prevClose,
+    currentPrice,
+  };
+  position.changeToday = positionDay(position).pct;
+  return position;
 }
 
 /** Look up a symbol. Returns null when Alpaca has no such asset. */

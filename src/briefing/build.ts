@@ -16,6 +16,7 @@
 //      and a failed fetch are indistinguishable.
 
 import { getAccount, getPositions } from "../core/alpaca";
+import { type CashFlows, dayChange, describeFlows, tryCashFlowsToday } from "../core/transfers";
 import type { Account, Position } from "../core/types";
 
 export type BriefingKind = "open" | "close";
@@ -23,6 +24,8 @@ export type BriefingKind = "open" | "close";
 export interface BriefingData {
   account: Account;
   positions: Position[];
+  /** Deposits and withdrawals since the previous close; null if unchecked. */
+  flows: CashFlows | null;
 }
 
 export class BriefingAbort extends Error {
@@ -34,8 +37,14 @@ export class BriefingAbort extends Error {
 
 export async function gather(): Promise<BriefingData> {
   try {
-    const [account, positions] = await Promise.all([getAccount(), getPositions()]);
-    return { account, positions };
+    // Transfers are a correction to the day figure, not the account itself:
+    // failing to read them flags the figure rather than aborting the briefing.
+    const [account, positions, flows] = await Promise.all([
+      getAccount(),
+      getPositions(),
+      tryCashFlowsToday(),
+    ]);
+    return { account, positions, flows };
   } catch (err) {
     // The core layer already throws on an empty body, a missing account number,
     // or a positions payload that is not a list. Translate that into an abort
@@ -46,18 +55,27 @@ export async function gather(): Promise<BriefingData> {
   }
 }
 
-/** One-line portfolio summary. */
-export function buildSummary(account: Account): string {
-  const change = account.equity - account.lastEquity;
-  const pct = account.lastEquity ? (change / account.lastEquity) * 100 : 0;
+/**
+ * One-line portfolio summary.
+ *
+ * The day change is net of deposits and withdrawals (`flows`): a deposit is
+ * not a gain. When they could not be checked (`null`), the line says the
+ * figure may include them.
+ */
+export function buildSummary(account: Account, flows: CashFlows | null): string {
+  const day = dayChange(account.equity, account.lastEquity, flows);
+  const change = day.amount;
+  const pct = day.pct * 100;
+  const note = describeFlows(day.flows);
   const money = (n: number): string =>
     n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   // The $ on the day change is load-bearing: a bare "-0.19" gets read back as a
   // percentage, which is a hundredfold misreading of the day.
   return (
     `Portfolio $${money(account.equity)} | ` +
-    `Day ${change >= 0 ? "+" : "-"}$${money(Math.abs(change))} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%) | ` +
-    `BP $${money(account.buyingPower)}`
+    `Day ${change >= 0 ? "+" : "-"}$${money(Math.abs(change))} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)` +
+    (note ? ` ${note}` : "") +
+    ` | BP $${money(account.buyingPower)}`
   );
 }
 

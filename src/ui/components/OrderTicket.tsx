@@ -1,7 +1,9 @@
 import * as React from "react";
 import { useEffect, useState } from "react";
+import { basename } from "node:path";
 import { Box, Text, useInput } from "ink";
 import type { Mode } from "../../core/config";
+import { appendJournal, formatTradeEntry, type JournalWrite } from "../../core/journal";
 import { getLatestPrice } from "../../core/market-data";
 import {
   assessOrder,
@@ -20,12 +22,21 @@ type Stage = "edit" | "confirm" | "placing" | "done";
 type Side = "buy" | "sell";
 type OType = "market" | "limit";
 
+/** Free text for the reasoning fields: anything printable, pasted text included. */
+const PRINTABLE = /^[^\x00-\x1f\x7f]+$/;
+
 /**
  * Order entry. Opened only when trading is ARMED.
  *
  * Preview-first with risk checks, and placing requires TYPING THE TICKER, so no
  * single keystroke can ever send an order. That is the same asymmetry the CLI
  * uses with `--confirm`: the safe thing is what happens when you are unsure.
+ *
+ * "Why" and "Wrong if" are optional, and go to journal/YYYY-MM.md when the
+ * order is accepted — written at the moment of decision, before the outcome
+ * is known, which is the only time that record is worth anything. Optional
+ * because a required essay per trade trains people to type "x"; recorded
+ * either way, because "no reason written down" is itself worth seeing later.
  */
 export function OrderTicket({
   initialSymbol,
@@ -61,6 +72,9 @@ export function OrderTicket({
   // Until the symbol field is touched, the first keystroke REPLACES the
   // pre-filled ticker rather than appending to it.
   const [symbolTouched, setSymbolTouched] = useState(false);
+  const [why, setWhy] = useState("");
+  const [wrongIf, setWrongIf] = useState("");
+  const [journal, setJournal] = useState<JournalWrite | null>(null);
 
   const sym = symbol.toUpperCase();
   const pos = positions.find((p) => p.symbol === sym);
@@ -173,6 +187,24 @@ export function OrderTicket({
           },
         ]
       : []),
+    {
+      label: "Why",
+      kind: "text",
+      display: why || "—",
+      hint: "(optional · goes in your journal)",
+      accept: (ch) => PRINTABLE.test(ch),
+      append: (ch) => setWhy((v) => (v + ch).slice(0, 300)),
+      backspace: () => setWhy((v) => v.slice(0, -1)),
+    },
+    {
+      label: "Wrong if",
+      kind: "text",
+      display: wrongIf || "—",
+      hint: "(optional · what would prove this a mistake)",
+      accept: (ch) => PRINTABLE.test(ch),
+      append: (ch) => setWrongIf((v) => (v + ch).slice(0, 300)),
+      backspace: () => setWrongIf((v) => v.slice(0, -1)),
+    },
   ];
   const foc = Math.min(focus, fields.length - 1);
 
@@ -180,6 +212,16 @@ export function OrderTicket({
     setStage("placing");
     placeOrder(req).then((r) => {
       logOrder(req, r, mode);
+      // Only an accepted order is a trade worth reasoning about; a rejected
+      // one is already in orders.log with its error.
+      if (r.ok) {
+        setJournal(
+          appendJournal(
+            formatTradeEntry({ ...req, price, mode, why, wrongIf }),
+          ),
+        );
+        onPlaced();
+      }
       setResult(r);
       setStage("done");
     });
@@ -190,10 +232,7 @@ export function OrderTicket({
       if (stage === "placing") return;
 
       if (stage === "done") {
-        if (key.return || key.escape) {
-          onPlaced();
-          onClose();
-        }
+        if (key.return || key.escape) onClose();
         return;
       }
 
@@ -355,6 +394,13 @@ export function OrderTicket({
               <Text color={theme.negative}>❌ order failed: {result.message}</Text>
             )}
             <Text {...mutedProps(theme)}>logged to journal/orders.log · esc close</Text>
+            {journal?.ok ? (
+              <Text {...mutedProps(theme)}>
+                reasoning journaled to journal/{basename(journal.file)}
+              </Text>
+            ) : journal ? (
+              <Text color={theme.warning}>⚠ could not write the journal: {journal.error}</Text>
+            ) : null}
           </>
         ) : null}
       </Box>

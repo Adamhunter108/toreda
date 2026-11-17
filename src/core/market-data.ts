@@ -18,6 +18,8 @@ import {
   isDemoMode,
 } from "./demo";
 import { getJson } from "./http";
+import { type EquityHistory, parseEquityHistory } from "./performance";
+import { FLOW_TYPES } from "./transfers";
 import type { Quote } from "./types";
 
 export type Feed = "iex" | "sip";
@@ -220,15 +222,21 @@ export async function getCloses(
   return out;
 }
 
-/** Portfolio equity time series — for the dashboard's equity chart. */
-export async function getEquityHistory(period = "1M", timeframe = "1D"): Promise<number[]> {
-  if (isDemoMode()) return demoEquityHistory(period);
+/**
+ * Portfolio equity over a period, with each deposit and withdrawal at the point
+ * it landed — for the dashboard's equity chart, which takes them out (see
+ * `performance`).
+ */
+export async function getEquityHistory(period = "1M", timeframe = "1D"): Promise<EquityHistory> {
+  if (isDemoMode()) {
+    const equity = demoEquityHistory(period);
+    return { equity, flows: equity.map(() => 0) };
+  }
   const cfg = loadConfig();
-  const url = `${cfg.tradeHost}/v2/account/portfolio/history?period=${period}&timeframe=${timeframe}`;
-  const data = await getJson<{ equity?: unknown }>(url, { headers: authHeaders() });
-  return Array.isArray(data.equity)
-    ? data.equity.filter((x): x is number => typeof x === "number")
-    : [];
+  const url =
+    `${cfg.tradeHost}/v2/account/portfolio/history?period=${period}&timeframe=${timeframe}` +
+    `&cashflow_types=${FLOW_TYPES.join(",")}`;
+  return parseEquityHistory(await getJson<unknown>(url, { headers: authHeaders() }));
 }
 
 // ── News ────────────────────────────────────────────────────────────────────

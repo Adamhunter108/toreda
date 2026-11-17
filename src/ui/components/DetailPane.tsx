@@ -2,44 +2,38 @@ import * as React from "react";
 import { Box, Text } from "ink";
 import type { SymbolStats } from "../../core/market-data";
 import { mutedProps, plColor } from "../../core/theme";
-import type { Position } from "../../core/types";
+import type { BookRow } from "../book";
 import { brailleChart } from "../charts";
-import { fmtQty, humanNum, signedUsd, snap0, usd } from "../format";
+import { fmtQty, humanNum, signedUsd, usd } from "../format";
 import { useTheme } from "../theme/ThemeContext";
 
 /**
- * Opened with Enter on a selected position. Shows cost detail, live
- * P&L, allocation, today's session stats for the stock, and a trend chart.
+ * Opened with Enter on a selected position. Shows cost detail, live P&L, where
+ * the position stands against YOUR rules (weight vs ceiling, price vs stop),
+ * today's session stats for the stock, and a trend chart.
  */
 export function DetailPane({
-  position: p,
-  price,
+  row: r,
   closes,
   stats,
-  bookValue,
+  stopLossPct,
+  breach,
   availCols,
 }: {
-  position: Position;
-  price?: number;
+  row: BookRow;
   closes: number[];
   stats: SymbolStats | null;
-  bookValue: number;
+  stopLossPct: number;
+  breach: { stop: boolean; ceiling: boolean } | undefined;
   availCols: number;
 }) {
   const t = useTheme();
-  const live = price !== undefined;
-  const px = price ?? p.currentPrice;
-  const value = p.qty * px;
-  const pl = value - p.costBasis;
-  const plPct = p.costBasis ? (pl / p.costBasis) * 100 : 0;
-  const dayPl = snap0(p.qty * (px - p.prevClose));
-  const dayPct = p.prevClose ? ((px - p.prevClose) / p.prevClose) * 100 : 0;
-  const plCol = plColor(t, pl);
-  const alloc = bookValue ? (value / bookValue) * 100 : 0;
+  const plCol = plColor(t, r.pl);
   const width = Math.max(24, Math.min(availCols - 12, 72));
   const chart = closes.length >= 2 ? brailleChart(closes, width, 5) : [];
   const lo = closes.length ? Math.min(...closes) : 0;
   const hi = closes.length ? Math.max(...closes) : 0;
+  const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
 
   const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <Box>
@@ -51,39 +45,59 @@ export function DetailPane({
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={t.border} paddingX={1}>
       <Text bold>
-        {p.symbol} <Text {...mutedProps(t)}>— position detail</Text>
+        {r.symbol} <Text {...mutedProps(t)}>— position detail</Text>
       </Text>
 
       <Box marginTop={1} flexDirection="column">
         <Text {...mutedProps(t)}>your holding</Text>
         <Row label="Shares">
-          <Text>{fmtQty(p.qty)}</Text>
+          <Text>{fmtQty(r.qty)}</Text>
         </Row>
         <Row label="Avg entry (paid)">
-          <Text>{usd(p.avgEntry)}/sh</Text>
-        </Row>
-        <Row label="Allocation">
-          <Text>{alloc.toFixed(1)}% of book</Text>
+          <Text>{usd(r.avgEntry)}/sh</Text>
         </Row>
         <Row label="Last">
-          <Text>{usd(px)} </Text>
-          <Text color={live ? t.positive : t.muted}>{live ? "● live" : "○ rest"}</Text>
+          <Text>{usd(r.price)} </Text>
+          <Text color={r.live ? t.positive : t.muted}>{r.live ? "● live" : "○ rest"}</Text>
         </Row>
         <Row label="Market value">
-          <Text>{usd(value)}</Text>
+          <Text>{usd(r.value)}</Text>
         </Row>
         <Row label="Cost basis">
-          <Text>{usd(p.costBasis)}</Text>
+          <Text>{usd(r.costBasis)}</Text>
         </Row>
         <Row label="Unrealized P&L">
           <Text color={plCol}>
-            {`${signedUsd(pl)} (${plPct >= 0 ? "+" : ""}${plPct.toFixed(2)}%)`}
+            {`${signedUsd(r.pl)} (${r.plPct >= 0 ? "+" : ""}${r.plPct.toFixed(2)}%)`}
           </Text>
         </Row>
         <Row label="Today">
-          <Text color={plColor(t, dayPl)}>
-            {`${signedUsd(dayPl)} (${dayPct >= 0 ? "+" : ""}${dayPct.toFixed(2)}%)`}
+          <Text color={plColor(t, r.dayPl)}>
+            {`${signedUsd(r.dayPl)} (${r.dayPct >= 0 ? "+" : ""}${r.dayPct.toFixed(2)}%)`}
           </Text>
+        </Row>
+      </Box>
+
+      <Box marginTop={1} flexDirection="column">
+        <Text {...mutedProps(t)}>your rules</Text>
+        <Row label="Weight">
+          <Text color={breach?.ceiling ? t.negative : undefined} bold={breach?.ceiling}>
+            {r.weight === null ? "—" : `${pct(r.weight)} of portfolio`}
+          </Text>
+          <Text {...mutedProps(t)}>
+            {` · ceiling ${pct(r.ceiling)}${r.override ? " (dated override)" : ""}`}
+          </Text>
+        </Row>
+        <Row label="Stop">
+          <Text color={breach?.stop ? t.negative : undefined} bold={breach?.stop}>
+            {usd(r.stopPrice)}/sh
+          </Text>
+          <Text {...mutedProps(t)}>{` · ${stopLossPct}% from entry`}</Text>
+          {breach?.stop ? (
+            <Text color={t.negative} bold>
+              {"  at or past it — the rule says sell"}
+            </Text>
+          ) : null}
         </Row>
       </Box>
 

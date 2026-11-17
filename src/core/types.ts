@@ -25,9 +25,20 @@ export interface Position {
   unrealizedPl: number;
   /** Fraction, not percent: 0.0132 means +1.32%. */
   unrealizedPlPct: number;
-  /** Today's move as a fraction. */
+  /**
+   * Today's gain or loss on this position, in dollars. Shares held at the
+   * previous close count from that close; shares bought today count from
+   * their fill, so a new position is not charged for a drop that happened
+   * before it was bought.
+   */
+  dayPl: number;
+  /**
+   * Today's move on this position as a fraction: `dayPl` over what the
+   * position stood at when your day began (see `positionDay`). For a
+   * position held overnight this is the stock's own move.
+   */
   changeToday: number;
-  /** Previous trading day's close — for computing live daily P&L. */
+  /** Previous trading day's close. Not the day basis for shares bought today. */
   prevClose: number;
   currentPrice: number;
 }

@@ -62,6 +62,8 @@ function toPosition(h: Holding): Position {
     marketValue,
     unrealizedPl: marketValue - costBasis,
     unrealizedPlPct: (marketValue - costBasis) / costBasis,
+    // Every demo holding was held overnight, so its day is the stock's move.
+    dayPl: h.qty * (h.price - h.prevClose),
     changeToday: (h.price - h.prevClose) / h.prevClose,
     prevClose: h.prevClose,
     currentPrice: h.price,

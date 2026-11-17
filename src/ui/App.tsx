@@ -1,19 +1,22 @@
 import * as React from "react";
 import { useMemo, useState } from "react";
+import { basename } from "node:path";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { loadConfig } from "../core/config";
 import { isDemoMode } from "../core/demo";
-import { loadRiskRules } from "../core/risk";
+import { appendJournal, formatRulesEntry } from "../core/journal";
+import { describeRuleChanges, type RiskRules } from "../core/risk";
 import { mutedProps } from "../core/theme";
-import type { Position } from "../core/types";
-import { loadWatchlistSectors, loadWatchlistSymbols } from "../core/watchlist";
-import { AllocationBar } from "./components/AllocationBar";
+import { loadWatchlist } from "../core/watchlist";
+import { bookAccountState, bookAlerts, breachesBySymbol, markBook, sortBook } from "./book";
 import { DetailPane } from "./components/DetailPane";
 import { EquityChart } from "./components/EquityChart";
 import { Header } from "./components/Header";
 import { OrderHistory } from "./components/OrderHistory";
 import { OrderTicket } from "./components/OrderTicket";
 import { Positions } from "./components/Positions";
+import { RiskRulesEditor, type SaveResult } from "./components/RiskRulesEditor";
+import { RulesStrip } from "./components/RulesStrip";
 import { ScannerSettings } from "./components/ScannerSettings";
 import { SignalsPanel } from "./components/SignalsPanel";
 import { SignalsView } from "./components/SignalsView";
@@ -32,9 +35,20 @@ import {
   useSymbolStats,
 } from "./hooks/useMarketData";
 import { usePrices } from "./hooks/usePrices";
+import { useRiskRules } from "./hooks/useRiskRules";
 import { useScanner } from "./hooks/useScanner";
 import { useScannerConfig } from "./hooks/useScannerConfig";
-import { shouldShowSparkline, zoomedPanelRows, zoomedSparkWidth } from "./layout";
+import {
+  contentRows,
+  fitPositions,
+  NARROW_WATCH_ROWS,
+  planGrid,
+  positionColumns,
+  positionsPanelWidth,
+  rulesStripHeight,
+  zoomedPanelRows,
+  zoomedPositionColumns,
+} from "./layout";
 import { useTheme } from "./theme/ThemeContext";
 
 /** Equity chart periods cycled with `p` — [Alpaca period, label, timeframe]. */
@@ -60,47 +74,52 @@ const SORTS = [
 const SECTIONS = ["positions", "watchlist", "signals", "chart"] as const;
 type Section = (typeof SECTIONS)[number];
 
-function sortPositions(positions: Position[], key: string): Position[] {
-  const arr = [...positions];
-  arr.sort((a, b) => {
-    if (key === "symbol") return a.symbol.localeCompare(b.symbol);
-    if (key === "pl") return b.unrealizedPl - a.unrealizedPl;
-    if (key === "day") return b.changeToday - a.changeToday;
-    return b.marketValue - a.marketValue;
-  });
-  return arr;
-}
-
 export function App() {
   const t = useTheme();
-  const { account, positions: rawPositions, error, updatedAt } = useAlpaca(20_000);
+  const {
+    account,
+    positions: rawPositions,
+    flows,
+    error,
+    updatedAt,
+    refresh: refreshAccount,
+  } = useAlpaca(20_000);
   const symbols = rawPositions.map((p) => p.symbol);
   const { prices, status } = usePrices(symbols);
 
   const [periodIdx, setPeriodIdx] = useState(1); // default 1M
   const [period, periodLabel, timeframe] = PERIODS[periodIdx] ?? PERIODS[1]!;
-  const equity = useEquityHistory(period, timeframe);
+  const history = useEquityHistory(period, timeframe);
   const closes = useCloses(symbols);
 
   const [wlVersion, setWlVersion] = useState(0);
-  const watchlist = useMemo(() => loadWatchlistSymbols(), [wlVersion]);
-  const sectors = useMemo(() => loadWatchlistSectors(), [wlVersion]);
-  const movers = useSnapshots(watchlist);
+  const wl = useMemo(() => loadWatchlist(), [wlVersion]);
+  const movers = useSnapshots(wl.symbols);
   const marketOpen = useClock();
   const realized = useRealized();
   const scan = useScanner();
   const { config: scannerConfig, update: updateScanner } = useScannerConfig();
-  const risk = useMemo(() => loadRiskRules(), []);
+  const { rules: risk, reload: reloadRisk, save: saveRisk } = useRiskRules();
   const tradeMode = useMemo(() => loadConfig().mode, []);
+
+  // ONE set of numbers for every panel — see ./book.ts for why.
+  const book = useMemo(
+    () => markBook(account, rawPositions, prices, risk, flows),
+    [account, rawPositions, prices, risk, flows],
+  );
+  const alerts = useMemo(() => bookAlerts(book, risk), [book, risk]);
+  const breaches = useMemo(() => breachesBySymbol(alerts), [alerts]);
+  const held = useMemo(() => new Set(rawPositions.map((p) => p.symbol)), [rawPositions]);
 
   const [sortIdx, setSortIdx] = useState(0);
   const [sortKey, sortLabel] = SORTS[sortIdx] ?? SORTS[0];
-  const positions = useMemo(() => sortPositions(rawPositions, sortKey), [rawPositions, sortKey]);
+  const rows = useMemo(() => sortBook(book.rows, sortKey), [book.rows, sortKey]);
 
   const { stdout } = useStdout();
   // DASH_COLS overrides width detection, so the smoke test can exercise the
   // wide layout in a non-TTY where real columns are not reported.
   const cols = Number(process.env.DASH_COLS) || stdout?.columns || 80;
+  const termRows = stdout?.rows ?? 40;
   const wide = cols >= 100;
   const chartCols = wide ? cols - 36 : cols;
 
@@ -116,7 +135,6 @@ export function App() {
   const [zoomed, setZoomed] = useState(envZoom !== undefined && envZoom !== "signals");
   const [wlCursor, setWlCursor] = useState(0);
   const [sigCursor, setSigCursor] = useState(0);
-  const wlRows = wide ? 12 : 8;
 
   // Watchlist ranked by absolute move, so the cursor over it picks something
   // worth acting on rather than whatever happens to be alphabetically first.
@@ -135,6 +153,7 @@ export function App() {
     process.env.DASH_SIGNALS === "1" || envZoom === "signals",
   );
   const [settingsOpen, setSettingsOpen] = useState(process.env.DASH_SETTINGS === "1");
+  const [rulesOpen, setRulesOpen] = useState(process.env.DASH_RULES === "1");
   // Trading is OFF by default. Disarmed, `o` is inert.
   const [armed, setArmed] = useState(process.env.DASH_ARMED === "1");
   const [orderOpen, setOrderOpen] = useState(process.env.DASH_ORDER === "1");
@@ -142,7 +161,7 @@ export function App() {
   const [historyOpen, setHistoryOpen] = useState(process.env.DASH_HISTORY === "1");
   const [themeOpen, setThemeOpen] = useState(process.env.DASH_THEME_PICKER === "1");
 
-  const sel = Math.min(selected, Math.max(0, positions.length - 1));
+  const sel = Math.min(selected, Math.max(0, rows.length - 1));
   const wlSel = Math.min(wlCursor, Math.max(0, sortedMovers.length - 1));
   const sigSel = Math.min(sigCursor, Math.max(0, sortedSignals.length - 1));
 
@@ -154,7 +173,24 @@ export function App() {
     setOrderOpen(true);
   };
 
-  const detailSymbol = detailOpen && positions[sel] ? positions[sel]!.symbol : null;
+  const openRules = (): void => {
+    reloadRisk(); // never start an edit from a stale copy
+    setRulesOpen(true);
+  };
+
+  const saveRules = (next: RiskRules, why: string, baseline: RiskRules): SaveResult => {
+    const changes = describeRuleChanges(baseline, next);
+    const saved = saveRisk(next, baseline);
+    if (!saved.ok) return { ok: false, message: saved.error };
+    // "A rule changed" is one of the journal entries the template asks for —
+    // the decision, dated, with its reason, next to the trades it affects.
+    const j = appendJournal(formatRulesEntry(changes, why));
+    return j.ok
+      ? { ok: true, message: `saved config/risk.json · journaled to journal/${basename(j.file)}` }
+      : { ok: true, message: `saved config/risk.json — but the journal entry failed: ${j.error}` };
+  };
+
+  const detailSymbol = detailOpen && rows[sel] ? rows[sel]!.symbol : null;
   const symbolStats = useSymbolStats(detailSymbol);
 
   useInput(
@@ -165,7 +201,7 @@ export function App() {
       }
       if (detailOpen) {
         if (input === "o") {
-          openOrder(positions[sel]?.symbol ?? "");
+          openOrder(rows[sel]?.symbol ?? "");
           return;
         }
         if (key.escape || key.return || input === " ") setDetailOpen(false);
@@ -189,7 +225,7 @@ export function App() {
       if (key.downArrow) {
         if (focus === "watchlist") setWlCursor((c) => Math.min(sortedMovers.length - 1, c + 1));
         else if (focus === "signals") setSigCursor((c) => Math.min(sortedSignals.length - 1, c + 1));
-        else if (focus === "positions") setSelected((s) => Math.min(positions.length - 1, s + 1));
+        else if (focus === "positions") setSelected((s) => Math.min(rows.length - 1, s + 1));
       }
       if (key.upArrow) {
         if (focus === "watchlist") setWlCursor((c) => Math.max(0, c - 1));
@@ -204,6 +240,7 @@ export function App() {
       if (input === "w") setWatchlistOpen(true);
       if (input === "g") setSignalsOpen(true);
       if (input === "c") setSettingsOpen(true);
+      if (input === "l") openRules();
       if (input === "t") setThemeOpen(true);
       if (input === "r") scan.refresh();
       // Deliberately shift-A: arming enables the only write path in the UI, and
@@ -218,7 +255,7 @@ export function App() {
             : focus === "signals"
               ? sortedSignals[sigSel]?.symbol
               : focus === "positions"
-                ? positions[sel]?.symbol
+                ? rows[sel]?.symbol
                 : undefined;
         openOrder(target ?? "");
       }
@@ -227,7 +264,7 @@ export function App() {
         updateScanner((c) => ({ ...c, minConfidence: Math.max(1, c.minConfidence - 1) }));
       if (input === "]")
         updateScanner((c) => ({ ...c, minConfidence: Math.min(9, c.minConfidence + 1) }));
-      if (key.return && focus === "positions" && positions.length > 0) {
+      if (key.return && focus === "positions" && rows.length > 0) {
         setDetailOpen(true);
       }
     },
@@ -237,6 +274,7 @@ export function App() {
         !watchlistOpen &&
         !signalsOpen &&
         !settingsOpen &&
+        !rulesOpen &&
         !orderOpen &&
         !historyOpen &&
         !themeOpen,
@@ -245,7 +283,7 @@ export function App() {
 
   // "This operation was aborted" is opaque; translate it.
   const friendly = error && /abort|timed out/i.test(error) ? "timed out — network down?" : error;
-  const hasData = account !== null || positions.length > 0;
+  const hasData = account !== null || rawPositions.length > 0;
   // Only take over the whole screen when there is nothing to show. Once data has
   // loaded, a transient error becomes a status-bar note and the last-known
   // dashboard stays up — a network blip should not blank everything.
@@ -269,35 +307,68 @@ export function App() {
 
   const headerBox = (
     <Box borderStyle="round" paddingX={1}>
-      <Header account={account} marketOpen={marketOpen} />
+      <Header book={book} buyingPower={account?.buyingPower ?? null} marketOpen={marketOpen} />
     </Box>
   );
-  const statBar = <StatBar positions={positions} prices={prices} realized={realized} />;
+  const statBar = <StatBar book={book} realized={realized} />;
 
   const statusBar = (hint: string) => (
     <StatusBar
       stream={status}
       updatedAt={updatedAt}
-      count={positions.length}
+      count={rawPositions.length}
       hint={hint}
       note={note}
     />
   );
 
+  // Demo output must never be mistakable for a real account — in a screenshot,
+  // in a screen share, or in somebody's memory of what they saw.
+  const demoBanner = isDemoMode() ? (
+    <Box paddingX={1}>
+      <Text bold color={t.info}>
+        ◆ DEMO
+      </Text>
+      <Text {...mutedProps(t)}> — fake data, no account connected, no orders possible</Text>
+    </Box>
+  ) : null;
+
+  // Shown on every screen from which `o` can reach the order ticket.
+  const armedBanner = armed ? (
+    <Box paddingX={1}>
+      <Text bold color={t.negative}>
+        ● TRADING ARMED
+      </Text>
+      <Text {...mutedProps(t)}> — real orders enabled · o to place · A to disarm</Text>
+    </Box>
+  ) : null;
+  const bannerLines = (demoBanner ? 1 : 0) + (armedBanner ? 1 : 0);
+
+  const rulesStrip = (
+    <RulesStrip alerts={alerts} rules={risk} positionCount={rawPositions.length} />
+  );
+  const cash =
+    book.known && book.equity > 0 ? { amount: book.cash, share: book.cash / book.equity } : null;
+  // Banners and the rules strip span the full width above the panels, so they
+  // come out of the row budget before any panel is sized.
+  const extraLines = bannerLines + rulesStripHeight(alerts === null ? null : alerts.length);
+
   // ── Full-screen views ─────────────────────────────────────────────────────
 
-  if (detailOpen && positions[sel]) {
-    const p = positions[sel]!;
+  if (detailOpen && rows[sel]) {
+    const r = rows[sel]!;
     return (
       <Box flexDirection="column">
         {headerBox}
         {statBar}
+        {demoBanner}
+        {armedBanner}
         <DetailPane
-          position={p}
-          price={prices[p.symbol]}
-          closes={closes[p.symbol] ?? []}
+          row={r}
+          closes={closes[r.symbol] ?? []}
           stats={symbolStats}
-          bookValue={account?.equity ?? 0}
+          stopLossPct={risk.stopLossPct}
+          breach={breaches[r.symbol]}
           availCols={cols}
         />
         {statusBar(`esc/⏎ back${armed ? " · o order" : ""} · q quit`)}
@@ -310,7 +381,7 @@ export function App() {
       <Box flexDirection="column">
         {headerBox}
         <WatchlistManager
-          symbols={watchlist}
+          symbols={wl.symbols}
           onChange={() => setWlVersion((v) => v + 1)}
           onClose={() => setWatchlistOpen(false)}
         />
@@ -323,6 +394,8 @@ export function App() {
     return (
       <Box flexDirection="column">
         {headerBox}
+        {demoBanner}
+        {armedBanner}
         <SignalsView
           result={scan.result}
           scanning={scan.scanning}
@@ -330,6 +403,7 @@ export function App() {
           lastRun={scan.lastRun}
           minConf={scannerConfig.minConfidence}
           armed={armed}
+          rows={zoomedPanelRows(termRows, bannerLines)}
           cursor={sigSel}
           onCursor={setSigCursor}
           onOrder={openOrder}
@@ -347,11 +421,26 @@ export function App() {
         {headerBox}
         <ScannerSettings
           config={scannerConfig}
-          sectors={sectors}
+          sectors={wl.sectors}
           update={updateScanner}
           onClose={() => setSettingsOpen(false)}
         />
         {statusBar("scanner settings · esc back")}
+      </Box>
+    );
+  }
+
+  if (rulesOpen) {
+    return (
+      <Box flexDirection="column">
+        {headerBox}
+        <RiskRulesEditor
+          rules={risk}
+          book={bookAccountState(book)}
+          onSave={saveRules}
+          onClose={() => setRulesOpen(false)}
+        />
+        {statusBar("risk rules · esc back")}
       </Box>
     );
   }
@@ -361,15 +450,18 @@ export function App() {
       <Box flexDirection="column">
         {headerBox}
         <OrderTicket
-          initialSymbol={orderSymbol || positions[sel]?.symbol || ""}
-          positions={positions}
+          initialSymbol={orderSymbol || rows[sel]?.symbol || ""}
+          positions={rawPositions}
           prices={prices}
-          account={account}
+          account={account ? { equity: book.equity, buyingPower: account.buyingPower } : null}
           risk={risk}
           mode={tradeMode}
           onClose={() => setOrderOpen(false)}
           onPlaced={() => {
-            /* positions and account refresh on their own 20s poll */
+            // Poll now, and again once a market order has had time to fill —
+            // otherwise the book shows the pre-trade position for up to 20s.
+            refreshAccount();
+            setTimeout(refreshAccount, 3_000);
           }}
         />
         {statusBar("order ticket · esc cancel")}
@@ -397,38 +489,15 @@ export function App() {
     );
   }
 
-  // ── Main grid ─────────────────────────────────────────────────────────────
-
-  // Demo output must never be mistakable for a real account — in a screenshot,
-  // in a screen share, or in somebody's memory of what they saw.
-  const demoBanner = isDemoMode() ? (
-    <Box paddingX={1}>
-      <Text bold color={t.info}>
-        ◆ DEMO
-      </Text>
-      <Text {...mutedProps(t)}> — fake data, no account connected, no orders possible</Text>
-    </Box>
-  ) : null;
-
-  const armedBanner = armed ? (
-    <Box paddingX={1}>
-      <Text bold color={t.negative}>
-        ● TRADING ARMED
-      </Text>
-      <Text {...mutedProps(t)}> — real orders enabled · o to place · A to disarm</Text>
-    </Box>
-  ) : null;
-
   // ── Zoomed section ────────────────────────────────────────────────────────
   //
   // The focused panel, given the whole terminal. Every key that works on it in
   // the grid still works here — this is the same section, bigger, not a new
-  // screen. The banners stay: zoomed is still the live dashboard, and `o` still
-  // reaches the order ticket from it.
+  // screen. The banners and the rules strip stay: zoomed is still the live
+  // dashboard, and `o` still reaches the order ticket from it.
 
   if (zoomed) {
-    const banners = (demoBanner ? 1 : 0) + (armedBanner ? 1 : 0);
-    const zoomRows = zoomedPanelRows(stdout?.rows ?? 40, banners);
+    const zoomRows = zoomedPanelRows(termRows, extraLines);
     const back = "space/esc back · q quit";
     let panel: React.ReactNode;
     let hint: string;
@@ -437,36 +506,38 @@ export function App() {
       panel = (
         <Watchlist
           movers={sortedMovers}
-          rows={Math.max(3, zoomRows - 5)} // border, title, and the two "more" lines
+          rows={Math.max(3, zoomRows - 7)} // border, title, header, more-lines, footnote
           cursor={wlSel}
           focused
+          detail={{ sectorOf: wl.sectorOf, held }}
         />
       );
       hint = `↑↓ select${armed ? " · o order" : ""} · ${back}`;
     } else if (focus === "chart") {
       panel = (
         <EquityChart
-          equity={equity}
+          history={history}
           availCols={cols}
           maxWidth={cols}
           periodLabel={periodLabel}
-          height={zoomRows - 3} // border and title
+          height={Math.max(4, zoomRows - 4)} // border, title, caveat
           focused
+          caveat
         />
       );
       hint = `p period · ${back}`;
     } else {
-      const sparkWidth = zoomedSparkWidth(cols);
       panel = (
         <Positions
-          positions={positions}
-          prices={prices}
+          rows={rows}
           closes={closes}
           selected={sel}
-          showSpark={sparkWidth > 0}
-          sparkWidth={sparkWidth}
+          columns={zoomedPositionColumns(cols)}
+          breaches={breaches}
           sortLabel={sortLabel}
           focused
+          maxRows={fitPositions(rows.length, zoomRows)}
+          cash={cash}
         />
       );
       hint = `↑↓ select · ⏎ detail · s sort${armed ? " · o order" : ""} · ${back}`;
@@ -478,25 +549,36 @@ export function App() {
         {statBar}
         {demoBanner}
         {armedBanner}
+        {rulesStrip}
         {panel}
         {statusBar(hint)}
       </Box>
     );
   }
 
-  // Show the sparkline only when the row genuinely fits — see src/ui/layout.ts
-  // for why this is not the same question as "is the terminal wide".
-  const showSpark = shouldShowSparkline(cols);
+  // ── Main grid ─────────────────────────────────────────────────────────────
+
+  const columns = positionColumns(positionsPanelWidth(cols));
+  // Every panel sized to fit, positions first — see planGrid in ./layout.ts.
+  const plan = planGrid({
+    wide,
+    nPos: rows.length,
+    nMovers: sortedMovers.length,
+    nSignals: scan.result ? sortedSignals.length : 0,
+    contentH: contentRows(termRows, extraLines),
+  });
 
   const positionsPanel = (
     <Positions
-      positions={positions}
-      prices={prices}
+      rows={rows}
       closes={closes}
       selected={sel}
-      showSpark={showSpark}
+      columns={columns}
+      breaches={breaches}
       sortLabel={sortLabel}
       focused={focus === "positions"}
+      maxRows={plan.posRows}
+      cash={cash}
     />
   );
   const signalsPanel = (
@@ -508,43 +590,23 @@ export function App() {
       minConf={scannerConfig.minConfidence}
       focused={focus === "signals"}
       cursor={sigSel}
+      rows={plan.signalRows}
     />
   );
 
-  // Balanced-fill layout (wide only): fill BOTH columns to a common target
-  // height so neither has dead space. The taller column sets the target, then
-  // the shorter one's flexible panel — the chart on the left, the watchlist on
-  // the right — grows to meet it. Figures are rendered rows: border = 2,
-  // title = 1, and so on.
-  const nPos = positions.length;
-  const positionsH = nPos ? nPos + 4 : 4;
-  const allocH = nPos ? nPos + 4 : 5;
-  const leftWidth = Math.max(0, cols - 35);
-  // Pair Positions and Allocation side by side only when Positions keeps enough
-  // width for its full row including the sparkline; otherwise stack them.
-  const allocBeside = leftWidth >= 110;
-  const topH = allocBeside ? Math.max(positionsH, allocH) : positionsH + allocH;
-
-  const SIG_ROWS = 6; // mirrors SignalsPanel's internal window
-  const signalsH =
-    scan.result && sortedSignals.length ? Math.min(sortedSignals.length, SIG_ROWS) + 5 : 4;
-
-  const CHART_MIN = 8; // floor so the chart stays legible when space is tight
-  const haveMovers = sortedMovers.length > 0;
-  const leftBase = topH + CHART_MIN + 3;
-  const rightBase = (haveMovers ? Math.min(sortedMovers.length, 8) + 5 : 4) + signalsH;
-  // Capped so a tall scan cannot push the frame past the terminal.
-  const maxContentH = Math.max(16, (stdout?.rows ?? 40) - 8);
-  const targetH = Math.min(maxContentH, Math.max(leftBase, rightBase));
-
-  const chartRows = Math.max(CHART_MIN, targetH - topH - 3);
-  const watchRows = haveMovers
-    ? Math.max(3, Math.min(sortedMovers.length, targetH - signalsH - 5))
-    : wlRows;
-
+  // The focused panel's own keys lead the hint. They used to sit in each
+  // panel's title, which wrapped in the narrow right column and shifted the
+  // layout whenever focus moved; the status bar has room, and it is one line
+  // whatever it says.
+  const focusKeys = {
+    positions: "↑↓ select · ⏎ detail · s sort",
+    watchlist: "↑↓ select",
+    signals: "↑↓ select · [/] line",
+    chart: "p period",
+  }[focus];
   const mainHint = wide
-    ? `${armed ? "o order · " : ""}space zoom · A ${armed ? "disarm" : "arm"} · h history · g signals · c settings · w watchlist · t theme · q quit`
-    : "A o h g c t · tab space q";
+    ? `${focusKeys} · ${armed ? "o order · " : ""}space zoom · l rules · A ${armed ? "disarm" : "arm"} · h history · g signals · c settings · w watchlist · t theme · q quit`
+    : "A o l h g c t · tab space q";
 
   return (
     <Box flexDirection="column">
@@ -552,35 +614,24 @@ export function App() {
       {statBar}
       {demoBanner}
       {armedBanner}
+      {rulesStrip}
 
       {wide ? (
         <Box>
           <Box flexDirection="column" flexGrow={1} marginRight={1}>
-            {allocBeside ? (
-              <Box>
-                {positionsPanel}
-                <Box width={26} marginLeft={1}>
-                  <AllocationBar positions={positions} prices={prices} barWidth={12} />
-                </Box>
-              </Box>
-            ) : (
-              <>
-                {positionsPanel}
-                <AllocationBar positions={positions} prices={prices} />
-              </>
-            )}
+            {positionsPanel}
             <EquityChart
-              equity={equity}
+              history={history}
               availCols={chartCols}
               periodLabel={periodLabel}
-              height={chartRows}
+              height={plan.chartRows}
               focused={focus === "chart"}
             />
           </Box>
           <Box flexDirection="column" width={34}>
             <Watchlist
               movers={sortedMovers}
-              rows={watchRows}
+              rows={plan.watchRows || WIDE_FALLBACK_WATCH}
               cursor={wlSel}
               focused={focus === "watchlist"}
             />
@@ -590,16 +641,16 @@ export function App() {
       ) : (
         <Box flexDirection="column">
           {positionsPanel}
-          <AllocationBar positions={positions} prices={prices} />
           <EquityChart
-            equity={equity}
+            history={history}
             availCols={chartCols}
             periodLabel={periodLabel}
+            height={plan.chartRows}
             focused={focus === "chart"}
           />
           <Watchlist
             movers={sortedMovers}
-            rows={wlRows}
+            rows={plan.watchRows || NARROW_WATCH_ROWS}
             cursor={wlSel}
             focused={focus === "watchlist"}
           />
@@ -611,3 +662,6 @@ export function App() {
     </Box>
   );
 }
+
+/** Watchlist rows before any movers have loaded (the panel shows "loading…"). */
+const WIDE_FALLBACK_WATCH = 12;

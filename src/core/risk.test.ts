@@ -1,8 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   DEFAULT_RISK_RULES,
+  describeRuleChanges,
   hasOverride,
   loadRiskRules,
   maxWeightFor,
@@ -51,10 +54,41 @@ test("the shipped defaults match the built-in constants", () => {
 });
 
 test("loading with no user config falls back to the shipped defaults", () => {
-  const loaded = loadRiskRules();
-  assert.equal(loaded.stopLossPct, DEFAULT_RISK_RULES.stopLossPct);
-  assert.equal(typeof loaded.defaultMaxWeight, "number");
-  assert.equal(typeof loaded.overrides, "object");
+  // Point the data home at an empty directory. Without this the test read the
+  // developer's own config/risk.json, and failed for anyone who had tuned their
+  // stop — testing their settings rather than the fallback.
+  const home = mkdtempSync(join(tmpdir(), "toreda-risk-"));
+  const prev = process.env.TOREDA_HOME;
+  process.env.TOREDA_HOME = home;
+  try {
+    const loaded = loadRiskRules();
+    assert.equal(loaded.stopLossPct, DEFAULT_RISK_RULES.stopLossPct);
+    assert.equal(typeof loaded.defaultMaxWeight, "number");
+    assert.equal(typeof loaded.overrides, "object");
+  } finally {
+    if (prev === undefined) delete process.env.TOREDA_HOME;
+    else process.env.TOREDA_HOME = prev;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("rule changes are described in words, one line each", () => {
+  const after: RiskRules = {
+    stopLossPct: -10,
+    defaultMaxWeight: 0.3,
+    trimProfitPct: 25,
+    overrides: { SHOP: { maxWeight: 0.35, decided: "2026-01-20", reason: "conviction" } },
+  };
+  assert.deepEqual(describeRuleChanges(rules, after), [
+    "stop loss −7% → −10%",
+    "default ceiling 25% → 30%",
+    "MSFT override removed — back to the 30% default",
+    "SHOP ceiling set to 35% (override: conviction)",
+  ]);
+});
+
+test("an unchanged rule set describes no changes", () => {
+  assert.deepEqual(describeRuleChanges(rules, structuredClone(rules)), []);
 });
 
 test("a stop loss is expressed as a negative percent", () => {

@@ -5,8 +5,10 @@ import { actionColor, confColor, mutedProps, plColor } from "../../core/theme";
 import type { ScanResult } from "../../scanner/types";
 import { useTheme } from "../theme/ThemeContext";
 
-/** Opportunities shown per screen — each occupies roughly three lines. */
-const VISIBLE = 4;
+/** Each opportunity occupies roughly three lines: header, reasoning, score. */
+const LINES_PER_OPP = 3;
+/** Never show fewer than this, however short the terminal. */
+const MIN_VISIBLE = 2;
 
 function bar(confidence: number): string {
   const n = Math.max(0, Math.min(10, Math.round(confidence)));
@@ -32,6 +34,7 @@ export function SignalsView({
   lastRun,
   minConf,
   armed,
+  rows,
   cursor,
   onCursor,
   onOrder,
@@ -44,6 +47,8 @@ export function SignalsView({
   lastRun: Date | null;
   minConf: number;
   armed: boolean;
+  /** Rows this view may occupy; the ranked list grows to fill them. */
+  rows: number;
   cursor: number;
   onCursor: (update: (c: number) => number) => void;
   onOrder: (symbol: string) => void;
@@ -67,11 +72,6 @@ export function SignalsView({
     { isActive: process.stdin.isTTY === true },
   );
 
-  const start = Math.max(
-    0,
-    Math.min(cur - Math.floor(VISIBLE / 2), Math.max(0, opps.length - VISIBLE)),
-  );
-  const view = opps.slice(start, start + VISIBLE);
   const when = lastRun
     ? lastRun.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     : "never";
@@ -79,6 +79,26 @@ export function SignalsView({
   const alerts = result?.positionAlerts ?? [];
   const discovery = result?.discovery;
   const degraded = result?.degraded ?? [];
+
+  // Size the ranked list to the screen: every other block's height is known, so
+  // whatever is left goes to opportunities. A fixed four used to leave most of
+  // a tall terminal empty — in the one view whose whole job is the full list.
+  const fixed =
+    3 + // border and title
+    (scanning ? 1 : 0) +
+    (error ? 1 : 0) +
+    (!result && !scanning ? 1 : 0) +
+    (degraded.length ? 2 + degraded.length : 0) +
+    (alerts.length ? 2 + alerts.length : 0) +
+    (opps.length ? 3 : 0) + // margin and the two more-lines
+    (discovery ? 4 + Math.max(1, Math.min(5, discovery.candidates.length)) : 0) +
+    2; // footer
+  const visible = Math.max(MIN_VISIBLE, Math.floor((rows - fixed) / LINES_PER_OPP));
+  const start = Math.max(
+    0,
+    Math.min(cur - Math.floor(visible / 2), Math.max(0, opps.length - visible)),
+  );
+  const view = opps.slice(start, start + visible);
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={t.border} paddingX={1}>
@@ -164,7 +184,7 @@ export function SignalsView({
             );
           })}
           <Text {...mutedProps(t)}>
-            {start + VISIBLE < opps.length ? ` ↓ ${opps.length - start - VISIBLE} more…` : " "}
+            {start + visible < opps.length ? ` ↓ ${opps.length - start - visible} more…` : " "}
           </Text>
         </Box>
       ) : null}

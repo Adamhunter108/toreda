@@ -7,18 +7,26 @@
 import { getAccount, getPositions } from "../../core/alpaca";
 import { loadConfig } from "../../core/config";
 import { loadRiskRules, maxWeightFor } from "../../core/risk";
+import { dayChange, describeFlows, tryCashFlowsToday } from "../../core/transfers";
 import { hasFlag, type ParsedArgs } from "../args";
 import { printBanner } from "../banner";
 import { c, heading, out, pctRaw, pl, qty, table, usd, usdSigned } from "../format";
 
 export async function run(args: ParsedArgs): Promise<number> {
   if (hasFlag(args, "json")) {
-    const [positions, account] = await Promise.all([getPositions(), getAccount()]);
+    const [positions, account, flows] = await Promise.all([
+      getPositions(),
+      getAccount(),
+      tryCashFlowsToday(),
+    ]);
     const risk = loadRiskRules();
+    const today = dayChange(account.equity, account.lastEquity, flows);
     process.stdout.write(
       JSON.stringify({
         mode: loadConfig().mode,
         account,
+        // Net of deposits and withdrawals; `transfers` null means unchecked.
+        today: { change: today.amount, pct: today.pct, transfers: today.flows },
         // Weight and its ceiling are included because every question worth
         // asking about a position ("is this too big?") needs both, and deriving
         // them separately is how two answers end up disagreeing.
@@ -34,7 +42,11 @@ export async function run(args: ParsedArgs): Promise<number> {
   }
 
   printBanner();
-  const [positions, account] = await Promise.all([getPositions(), getAccount()]);
+  const [positions, account, flows] = await Promise.all([
+    getPositions(),
+    getAccount(),
+    tryCashFlowsToday(),
+  ]);
 
   out(heading("Positions"));
 
@@ -87,14 +99,21 @@ export async function run(args: ParsedArgs): Promise<number> {
     ),
   );
 
-  const dayChange = account.equity - account.lastEquity;
+  // Net of any deposit or withdrawal since the previous close.
+  const today = dayChange(account.equity, account.lastEquity, flows);
+  const note = describeFlows(today.flows);
   out(
     "",
     `  ${c.dim("Equity")} ${usd(account.equity)}   ` +
-      `${c.dim("Today")} ${pl(dayChange, usdSigned(dayChange))}   ` +
+      `${c.dim("Today")} ${pl(today.amount, usdSigned(today.amount))}` +
+      (note ? ` ${today.flows ? c.dim(`(${note})`) : c.yellow(`(${note})`)}` : "") +
+      "   " +
       `${c.dim("Buying power")} ${usd(account.buyingPower)}`,
     "",
-    c.dim("  DAY is today's move. P&L is lifetime unrealized since entry."),
+    c.dim(
+      "  DAY is today's move (from your fill on shares bought today). " +
+        "P&L is lifetime unrealized since entry.",
+    ),
     "",
   );
   return 0;

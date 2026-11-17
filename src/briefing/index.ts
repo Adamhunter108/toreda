@@ -91,8 +91,8 @@ export async function runBriefing(options: BriefOptions): Promise<BriefResult> {
       }
     }
 
-    const { account, positions } = await gather();
-    const summary = buildSummary(account);
+    const { account, positions, flows } = await gather();
+    const summary = buildSummary(account, flows);
     const table = buildTable(positions);
 
     let scanText = "";

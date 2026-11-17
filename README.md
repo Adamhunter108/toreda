@@ -51,8 +51,9 @@ the arithmetic behind a score, so you can disagree with it.
 English, and have it argue _against_ your trade ideas before you place them.
 
 🛡️ **Your own risk rules** — set a stop loss and a maximum position size once,
-and every scan checks your holdings against them. A position that quietly grows
-too large gets flagged even on a day nothing else happens.
+and the dashboard checks every holding against them on every price tick. A
+position that quietly grows too large gets flagged even on a day nothing else
+happens.
 
 ⚡ **Trade without leaving the screen** — place buy and sell orders straight
 from the dashboard, with a preview and a confirmation step before anything is
@@ -169,7 +170,8 @@ it out before you start.
 | `↑` `↓` | Move around                                               |
 | `tab`   | Jump between positions, watchlist, signals, and the chart |
 | `space` | Expand the highlighted section to full screen, and back   |
-| `enter` | Open a position — cost, charts, today's range             |
+| `enter` | Open a position — cost, your stop and ceiling, charts     |
+| `l`     | View and change your risk rules                           |
 | `r`     | Run a scan for opportunities                              |
 | `g`     | See all signals in detail                                 |
 | `w`     | Add or remove stocks from your watchlist                  |
@@ -178,6 +180,23 @@ it out before you start.
 | `p` `s` | Change the chart period / sort the positions              |
 | `h`     | Order history                                             |
 | `q`     | Quit                                                      |
+
+### Your rules, on screen
+
+The line above the panels is your risk rules, checked live. It says
+**✓ Within your rules** when every position is inside them, and lists each
+breach — a stop reached, a position over its size ceiling — when one is not.
+The matching cell in the positions table is highlighted, and the **WT** column
+shows each position's share of your whole portfolio, cash included: the same
+number the rule is checked against. On a wide enough terminal an allocation bar
+sits beside it, with a `│` marking that position's ceiling, so you can see how
+much room it has left.
+
+Press **`l`** to change the rules. Nothing saves until you press `s`, and before
+it does you see exactly what changes — including any current breach the change
+would make disappear. Raising one stock's ceiling above the default needs a
+written reason, and is dated automatically. Every saved change is written to
+your journal.
 
 ### Trading from the dashboard
 
@@ -189,7 +208,9 @@ When you actually want to trade:
 1. Press **`shift`+`A`** to arm it. A red **● TRADING ARMED** banner appears so
    there's no ambiguity.
 2. Highlight a stock and press **`o`** to open an order ticket.
-3. Fill in buy or sell, how many shares, market or limit.
+3. Fill in buy or sell, how many shares, market or limit — and, if you like,
+   **why** and what would prove it **wrong**. Those go in your journal when the
+   order is accepted, written before you know how it turns out.
 4. toreda shows you the estimated cost, your available cash, and warns you if
    the trade would make a position bigger than your own rules allow.
 5. To send it, **type the ticker symbol out in full** and press enter.
