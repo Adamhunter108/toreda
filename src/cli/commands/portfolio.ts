@@ -6,6 +6,7 @@
 
 import { getAccount, getPositions } from "../../core/alpaca";
 import { loadConfig } from "../../core/config";
+import { fundsOf } from "../../core/funds";
 import { loadRiskRules, maxWeightFor } from "../../core/risk";
 import { dayChange, describeFlows, tryCashFlowsToday } from "../../core/transfers";
 import { hasFlag, type ParsedArgs } from "../args";
@@ -25,6 +26,8 @@ export async function run(args: ParsedArgs): Promise<number> {
       JSON.stringify({
         mode: loadConfig().mode,
         account,
+        // `buyingPower` includes margin; `funds.cash` is the money available.
+        funds: fundsOf(account),
         // Net of deposits and withdrawals; `transfers` null means unchecked.
         today: { change: today.amount, pct: today.pct, transfers: today.flows },
         // Weight and its ceiling are included because every question worth
@@ -102,13 +105,16 @@ export async function run(args: ParsedArgs): Promise<number> {
   // Net of any deposit or withdrawal since the previous close.
   const today = dayChange(account.equity, account.lastEquity, flows);
   const note = describeFlows(today.flows);
+  const funds = fundsOf(account);
   out(
     "",
     `  ${c.dim("Equity")} ${usd(account.equity)}   ` +
       `${c.dim("Today")} ${pl(today.amount, usdSigned(today.amount))}` +
       (note ? ` ${today.flows ? c.dim(`(${note})`) : c.yellow(`(${note})`)}` : "") +
       "   " +
-      `${c.dim("Buying power")} ${usd(account.buyingPower)}`,
+      `${c.dim("Cash")} ${usd(funds.cash)}` +
+      (funds.margin > 0 ? c.dim(` (+${usd(funds.margin)} margin)`) : "") +
+      (funds.loan > 0 ? "   " + c.yellow(`Margin loan ${usd(funds.loan)}`) : ""),
     "",
     c.dim(
       "  DAY is today's move (from your fill on shares bought today). " +

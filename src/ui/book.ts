@@ -163,7 +163,7 @@ export function markBook(
 /** The book in the scanner's shape, so rule checks run through the same code. */
 export function bookAccountState(book: Book): AccountState | null {
   if (!book.known) return null;
-  const state: AccountState = { positions: {}, buyingPower: 0, portfolioValue: book.equity };
+  const state: AccountState = { positions: {}, cash: 0, portfolioValue: book.equity };
   for (const r of book.rows) {
     state.positions[r.symbol] = {
       qty: r.qty,

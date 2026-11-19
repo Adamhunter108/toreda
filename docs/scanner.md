@@ -139,8 +139,8 @@ does the opposite — and is the single fastest way to make this scanner worse.
 ## Position awareness
 
 Every signal is reconciled against what you actually hold. Without this, a
-scanner recommends buying something you already hold at +100% with no buying
-power left.
+scanner recommends buying something you already hold at +100% with no cash
+left.
 
 - **Held positions are always scanned**, watchlist or not
 - A `buy` on a position that is both **past its ceiling and deeply profitable**
@@ -148,7 +148,9 @@ power left.
   momentum signal is most tempting and most dangerous
 - Approaching the ceiling adds a note without changing the action
 - A position **at or past the stop** turns any signal into `sell`
-- Buys are flagged as unactionable when buying power is under $25
+- Buys are flagged as unactionable when cash is under $25. Margin does not count:
+  on a margin account buying power includes what Alpaca would lend, which would
+  make almost any buy look affordable
 
 ---
 

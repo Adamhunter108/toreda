@@ -5,6 +5,7 @@ import { assessOrder, formatOrderLogLine, type OrderContext, type OrderRequest }
 const ctx = (over: Partial<OrderContext> = {}): OrderContext => ({
   equity: 10_000,
   buyingPower: 5_000,
+  cash: 5_000,
   heldQty: 0,
   heldValue: 0,
   price: 100,
@@ -37,6 +38,37 @@ test("a buy is blocked when the price is unknown", () => {
 test("a buy is blocked when it exceeds buying power", () => {
   const a = assessOrder(buy({ qty: "100" }), ctx({ buyingPower: 500 }));
   assert.match(a.blocks.join(" "), /exceeds buying power/);
+});
+
+// On a margin account buying power is cash plus what Alpaca would lend, so a
+// buy can pass the buying-power check while most of it is borrowed. Alpaca
+// would take it without comment; the preview must not.
+test("a buy past your cash warns that it borrows on margin", () => {
+  const a = assessOrder(buy({ qty: "5" }), ctx({ cash: 300, buyingPower: 2_000 }));
+  assert.deepEqual(a.blocks, []);
+  assert.match(a.warnings.join(" "), /borrows \$200\.00 on margin \(you have \$300\.00 in cash\)/);
+});
+
+test("a buy within your cash says nothing about margin", () => {
+  const a = assessOrder(buy({ qty: "3" }), ctx({ cash: 300, buyingPower: 2_000 }));
+  assert.deepEqual(a.warnings, []);
+});
+
+test("with no cash at all, the whole buy is borrowed", () => {
+  const a = assessOrder(buy({ qty: "1" }), ctx({ cash: 0, buyingPower: 2_000 }));
+  assert.match(a.warnings.join(" "), /borrows \$100\.00 on margin/);
+});
+
+// Past buying power the order cannot be placed at all; one message is enough.
+test("a buy past buying power is blocked, not also warned about margin", () => {
+  const a = assessOrder(buy({ qty: "30" }), ctx({ cash: 300, buyingPower: 2_000 }));
+  assert.match(a.blocks.join(" "), /exceeds buying power/);
+  assert.doesNotMatch(a.warnings.join(" "), /margin/);
+});
+
+test("a sell never mentions margin", () => {
+  const a = assessOrder(buy({ side: "sell", qty: "5" }), ctx({ heldQty: 5, cash: 0 }));
+  assert.deepEqual(a.warnings, []);
 });
 
 // Selling more than you hold opens a short. Alpaca would allow it; almost

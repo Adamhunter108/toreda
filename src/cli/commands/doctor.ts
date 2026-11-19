@@ -14,6 +14,7 @@ import { existsSync } from "node:fs";
 import { arch, platform, release } from "node:os";
 import { getAccount, getClock } from "../../core/alpaca";
 import { checkEnvPermissions, loadConfig, modeLabel, readEnv } from "../../core/config";
+import { fundsOf } from "../../core/funds";
 import { getQuotes } from "../../core/market-data";
 import { configFile, dataHome, envFile, REPO_ROOT } from "../../core/paths";
 import { loadRiskRules } from "../../core/risk";
@@ -195,12 +196,14 @@ async function connectivityChecks(): Promise<Check[]> {
 
   try {
     const account = await getAccount();
+    const funds = fundsOf(account);
+    const money = (n: number): string => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
     checks.push({
       status: account.status === "ACTIVE" ? "ok" : "warn",
       label: `Trading API — account ${account.accountNumber}`,
       detail:
-        `${account.status}, equity $${account.equity.toLocaleString("en-US", { minimumFractionDigits: 2 })}, ` +
-        `buying power $${account.buyingPower.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+        `${account.status}, equity ${money(account.equity)}, cash ${money(funds.cash)}` +
+        (funds.margin > 0 ? ` (+${money(funds.margin)} margin)` : ""),
     });
   } catch (err) {
     checks.push({

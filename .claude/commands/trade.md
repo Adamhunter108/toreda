@@ -15,7 +15,8 @@ npm run toreda -- portfolio --json
 npm run toreda -- quote <SYMBOL> --json
 ```
 
-Do I hold it? At what weight, against what ceiling? What is buying power? For a
+Do I hold it? At what weight, against what ceiling? How much cash is there
+(`funds.cash` in `account --json`; buying power includes margin)? For a
 sell, how many shares do I actually have?
 
 ### 2. Preview — sends nothing

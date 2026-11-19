@@ -16,6 +16,7 @@
 //      and a failed fetch are indistinguishable.
 
 import { getAccount, getPositions } from "../core/alpaca";
+import { fundsOf } from "../core/funds";
 import { type CashFlows, dayChange, describeFlows, tryCashFlowsToday } from "../core/transfers";
 import type { Account, Position } from "../core/types";
 
@@ -69,13 +70,16 @@ export function buildSummary(account: Account, flows: CashFlows | null): string 
   const note = describeFlows(day.flows);
   const money = (n: number): string =>
     n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Cash, not buying power: on a margin account buying power includes what
+  // Alpaca would lend, and a briefing that quotes it invites spending a loan.
+  const funds = fundsOf(account);
   // The $ on the day change is load-bearing: a bare "-0.19" gets read back as a
   // percentage, which is a hundredfold misreading of the day.
   return (
     `Portfolio $${money(account.equity)} | ` +
     `Day ${change >= 0 ? "+" : "-"}$${money(Math.abs(change))} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)` +
     (note ? ` ${note}` : "") +
-    ` | BP $${money(account.buyingPower)}`
+    (funds.loan > 0 ? ` | Margin loan $${money(funds.loan)}` : ` | Cash $${money(funds.cash)}`)
   );
 }
 

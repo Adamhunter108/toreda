@@ -6,20 +6,23 @@ import { humanNum } from "../format";
 import { useTheme } from "../theme/ThemeContext";
 
 /**
- * The watchlist ranked by absolute move today (pre-sorted by the caller).
+ * The watchlist with today's move, in whichever order `sortLabel` names; the
+ * caller sorts (see ../watchlist-sort.ts).
  *
- * When focused via Tab, ↑↓ move a cursor and `o` orders the highlighted name.
- * Zoomed (space), it has the width for `detail`: what you hold, the previous
- * close, volume against the last full session, and the sector.
+ * When focused via Tab, ↑↓ move a cursor, `s` changes the sort and `o` orders
+ * the highlighted name. Zoomed (space), it has the width for `detail`: what you
+ * hold, the previous close, volume against the last full session, and the sector.
  */
 export function Watchlist({
   movers,
+  sortLabel,
   rows = 12,
   cursor = 0,
   focused = false,
   detail,
 }: {
   movers: Snapshot[];
+  sortLabel: string;
   rows?: number;
   cursor?: number;
   focused?: boolean;
@@ -43,9 +46,10 @@ export function Watchlist({
     >
       {/* The title never changes with focus: in the 34-column right column a
           focus hint wrapped it onto a second line, and the whole column
-          shifted every time Tab landed here. Key hints live in the status bar. */}
+          shifted every time Tab landed here. Key hints live in the status bar.
+          The longest title, "Watchlist Δ today · your order", is exactly 30. */}
       <Text bold wrap="truncate-end">
-        Watchlist <Text {...mutedProps(t)}>Δ today</Text>
+        Watchlist <Text {...mutedProps(t)}>Δ today · {sortLabel}</Text>
       </Text>
 
       {movers.length === 0 ? (

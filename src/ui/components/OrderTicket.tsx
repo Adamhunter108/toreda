@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { basename } from "node:path";
 import { Box, Text, useInput } from "ink";
 import type { Mode } from "../../core/config";
+import { fundsOf } from "../../core/funds";
 import { appendJournal, formatTradeEntry, type JournalWrite } from "../../core/journal";
 import { getLatestPrice } from "../../core/market-data";
 import {
@@ -51,7 +52,7 @@ export function OrderTicket({
   initialSymbol: string;
   positions: Position[];
   prices: Record<string, number>;
-  account: { equity: number; buyingPower: number } | null;
+  account: { equity: number; buyingPower: number; cash: number } | null;
   risk: RiskRules;
   mode: Mode;
   onClose: () => void;
@@ -118,9 +119,11 @@ export function OrderTicket({
     type: otype,
     ...(otype === "limit" ? { limitPrice } : {}),
   };
+  const funds = fundsOf(account ?? { cash: 0, buyingPower: 0 });
   const assessment = assessOrder(req, {
     equity: account?.equity ?? 0,
     buyingPower: account?.buyingPower ?? 0,
+    cash: funds.cash,
     heldQty,
     heldValue: heldQty * price,
     price,
@@ -329,8 +332,9 @@ export function OrderTicket({
         <Text>{orderLine}</Text>
         <Text {...mutedProps(theme)}>
           {"  "}last {price > 0 ? usd(price) : fetchingPrice ? "fetching…" : "unknown"} · est{" "}
-          {side === "buy" ? "cost" : "proceeds"} {price > 0 ? usd(assessment.estCost) : "—"} · BP{" "}
-          {usd(account?.buyingPower ?? 0)}
+          {side === "buy" ? "cost" : "proceeds"} {price > 0 ? usd(assessment.estCost) : "—"} · cash{" "}
+          {usd(funds.cash)}
+          {funds.margin > 0 ? ` (+${usd(funds.margin)} margin)` : ""}
           {heldQty > 0 ? ` · you hold ${heldQty}` : ""}
         </Text>
         {assessment.warnings.map((w, i) => (

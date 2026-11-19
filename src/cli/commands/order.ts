@@ -10,6 +10,7 @@
 
 import { getAccount, getPositions } from "../../core/alpaca";
 import { loadConfig } from "../../core/config";
+import { fundsOf } from "../../core/funds";
 import { getLatestPrice } from "../../core/market-data";
 import {
   assessOrder,
@@ -91,9 +92,11 @@ export async function run(args: ParsedArgs): Promise<number> {
   const price = held?.currentPrice || (await getLatestPrice(request.symbol));
   const risk = loadRiskRules();
 
+  const funds = fundsOf(account);
   const assessment = assessOrder(request, {
     equity: account.equity,
     buyingPower: account.buyingPower,
+    cash: funds.cash,
     heldQty: held?.qty ?? 0,
     heldValue: held?.marketValue ?? 0,
     price,
@@ -118,7 +121,8 @@ export async function run(args: ParsedArgs): Promise<number> {
     `  ${c.dim("last")} ${price > 0 ? usd(price) : c.dim("unknown")}` +
       `   ${c.dim(request.side === "buy" ? "est. cost" : "est. proceeds")} ` +
       `${price > 0 || request.type === "limit" ? usd(assessment.estCost) : c.dim("—")}` +
-      `   ${c.dim("buying power")} ${usd(account.buyingPower)}`,
+      `   ${c.dim("cash")} ${usd(funds.cash)}` +
+      (funds.margin > 0 ? c.dim(` (+${usd(funds.margin)} margin)`) : ""),
   );
   if (held) out(`  ${c.dim("you hold")} ${fmtQty(held.qty)} ${request.symbol}`);
   out(`  ${c.dim("endpoint")} ${cfg.tradeHost}`);

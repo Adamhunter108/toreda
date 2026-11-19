@@ -7,6 +7,7 @@ import { isDemoMode } from "../core/demo";
 import { appendJournal, formatRulesEntry } from "../core/journal";
 import { describeRuleChanges, type RiskRules } from "../core/risk";
 import { mutedProps } from "../core/theme";
+import { loadUiConfig, saveUiConfig, WATCHLIST_SORTS, type WatchlistSort } from "../core/ui-config";
 import { loadWatchlist } from "../core/watchlist";
 import {
   bookAccountState,
@@ -57,6 +58,7 @@ import {
   zoomedPositionColumns,
 } from "./layout";
 import { useTheme } from "./theme/ThemeContext";
+import { nextWatchlistSort, sortWatchlist, WATCHLIST_SORT_LABELS } from "./watchlist-sort";
 
 /** Equity chart periods cycled with `p` — [Alpaca period, label, timeframe]. */
 const PERIODS: ReadonlyArray<readonly [string, string, string]> = [
@@ -145,12 +147,14 @@ export function App() {
   const [wlCursor, setWlCursor] = useState(0);
   const [sigCursor, setSigCursor] = useState(0);
 
-  // Watchlist ranked by absolute move, so the cursor over it picks something
-  // worth acting on rather than whatever happens to be alphabetically first.
+  // `s` on the focused watchlist cycles its sort; the choice is saved to
+  // config/ui.json so "your order" is still there next launch.
+  const [wlSort, setWlSort] = useState<WatchlistSort>(() => loadUiConfig().watchlistSort);
   const sortedMovers = useMemo(
-    () => [...movers].sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct)),
-    [movers],
+    () => sortWatchlist(movers, wlSort, wl.ordered),
+    [movers, wlSort, wl.ordered],
   );
+  const wlSortLabel = WATCHLIST_SORT_LABELS[wlSort];
   const sortedSignals = useMemo(() => {
     if (!scan.result) return [];
     return [...scan.result.opportunities].sort((a, b) => b.confidence - a.confidence);
@@ -242,7 +246,13 @@ export function App() {
         else if (focus === "positions") setSelected((s) => Math.max(0, s - 1));
       }
       if (input === "p") setPeriodIdx((i) => (i + 1) % PERIODS.length);
-      if (input === "s") {
+      // `s` sorts the watchlist when it has focus, and the positions otherwise.
+      if (input === "s" && focus === "watchlist") {
+        const next = nextWatchlistSort(wlSort, WATCHLIST_SORTS);
+        setWlSort(next);
+        saveUiConfig({ watchlistSort: next });
+        setWlCursor(0);
+      } else if (input === "s") {
         setSortIdx((i) => (i + 1) % SORTS.length);
         setSelected(0);
       }
@@ -316,7 +326,7 @@ export function App() {
 
   const headerBox = (
     <Box borderStyle="round" paddingX={1}>
-      <Header book={book} buyingPower={account?.buyingPower ?? null} marketOpen={marketOpen} />
+      <Header book={book} account={account} marketOpen={marketOpen} />
     </Box>
   );
   const statBar = <StatBar book={book} realized={realized} />;
@@ -396,7 +406,7 @@ export function App() {
       <Box flexDirection="column">
         {headerBox}
         <WatchlistManager
-          symbols={wl.symbols}
+          symbols={wl.ordered}
           onChange={() => setWlVersion((v) => v + 1)}
           onClose={() => setWatchlistOpen(false)}
         />
@@ -468,7 +478,11 @@ export function App() {
           initialSymbol={orderSymbol || rows[sel]?.symbol || ""}
           positions={rawPositions}
           prices={prices}
-          account={account ? { equity: book.equity, buyingPower: account.buyingPower } : null}
+          account={
+            account
+              ? { equity: book.equity, buyingPower: account.buyingPower, cash: account.cash }
+              : null
+          }
           risk={risk}
           mode={tradeMode}
           onClose={() => setOrderOpen(false)}
@@ -521,13 +535,14 @@ export function App() {
       panel = (
         <Watchlist
           movers={sortedMovers}
+          sortLabel={wlSortLabel}
           rows={Math.max(3, zoomRows - 7)} // border, title, header, more-lines, footnote
           cursor={wlSel}
           focused
           detail={{ sectorOf: wl.sectorOf, held }}
         />
       );
-      hint = `↑↓ select${armed ? " · o order" : ""} · ${back}`;
+      hint = `↑↓ select · s sort · w reorder${armed ? " · o order" : ""} · ${back}`;
     } else if (focus === "chart") {
       panel = (
         <EquityChart
@@ -615,7 +630,7 @@ export function App() {
   // whatever it says.
   const focusKeys = {
     positions: "↑↓ select · ⏎ detail · s sort",
-    watchlist: "↑↓ select",
+    watchlist: "↑↓ select · s sort",
     signals: "↑↓ select · [/] line",
     chart: "p period",
   }[focus];
@@ -646,6 +661,7 @@ export function App() {
           <Box flexDirection="column" width={34}>
             <Watchlist
               movers={sortedMovers}
+              sortLabel={wlSortLabel}
               rows={plan.watchRows || WIDE_FALLBACK_WATCH}
               cursor={wlSel}
               focused={focus === "watchlist"}
@@ -665,6 +681,7 @@ export function App() {
           />
           <Watchlist
             movers={sortedMovers}
+            sortLabel={wlSortLabel}
             rows={plan.watchRows || NARROW_WATCH_ROWS}
             cursor={wlSel}
             focused={focus === "watchlist"}

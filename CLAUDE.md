@@ -136,6 +136,12 @@ likely to work". Never restate it as a percentage, a likelihood, or odds.
 Never describe a lifetime figure as today's performance. A flat day on a
 position up 28% since entry is a flat day.
 
+**Buying power is not cash.** On a margin account, Alpaca's `buyingPower`
+includes what it would lend against the stocks held. At 2× that is roughly
+cash plus equity again. The money available is `funds.cash` (in `account
+--json` and `portfolio --json`); anything past it is borrowing, so say that
+when an order would use it.
+
 **Discovery is unvetted.** Names in the discovery block were surfaced by a
 screen, not analysed. They are a prompt to go and look. Never present one as a
 recommendation, and never mix them into the ranked signals.

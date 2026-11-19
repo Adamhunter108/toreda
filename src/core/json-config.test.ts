@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadWatchlist } from "./watchlist";
 import { loadScannerConfig, DEFAULT_SCANNER_CONFIG } from "./scanner-config";
-import { loadUiConfig } from "./ui-config";
+import { saveJsonConfig } from "./json-config";
+import { loadUiConfig, saveUiConfig } from "./ui-config";
 import { THEMES } from "./theme";
 
 // A fresh clone has no config/*.json — only the shipped config/*.default.json.
@@ -68,4 +69,19 @@ test("scanner thresholds keep the signs their meaning requires", () => {
 test("ui config loads and names a real theme", () => {
   const ui = loadUiConfig();
   assert.ok(ui.theme in THEMES, `${ui.theme} is not a defined theme`);
+  assert.equal(ui.watchlistSort, "move", "a fresh clone ranks the watchlist by move");
+});
+
+// The theme picker used to write `{ theme }` as the whole file. With a second
+// preference in it, that would have reset the watchlist sort on every theme
+// change.
+test("saving one ui preference keeps the others", () => {
+  saveUiConfig({ watchlistSort: "custom" });
+  saveUiConfig({ theme: "Nord" });
+  assert.deepEqual(loadUiConfig(), { theme: "Nord", watchlistSort: "custom" });
+});
+
+test("an unknown watchlist sort in ui.json falls back to by move", () => {
+  saveJsonConfig("ui.json", { theme: "Nord", watchlistSort: "sideways" });
+  assert.equal(loadUiConfig().watchlistSort, "move");
 });

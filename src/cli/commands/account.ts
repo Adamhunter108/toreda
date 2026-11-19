@@ -2,6 +2,7 @@
 
 import { getAccount } from "../../core/alpaca";
 import { loadConfig } from "../../core/config";
+import { fundsOf } from "../../core/funds";
 import { dayChange, describeFlows, tryCashFlowsToday } from "../../core/transfers";
 import { hasFlag, type ParsedArgs } from "../args";
 import { printBanner } from "../banner";
@@ -18,6 +19,9 @@ export async function run(args: ParsedArgs): Promise<number> {
       JSON.stringify({
         mode: loadConfig().mode,
         account,
+        // `buyingPower` includes margin. `funds.cash` is what a buy can spend
+        // without borrowing; quote that as the money available.
+        funds: fundsOf(account),
         today: { change: today.amount, pct: today.pct, transfers: today.flows },
       }),
     );
@@ -31,6 +35,7 @@ export async function run(args: ParsedArgs): Promise<number> {
   // is not a gain. See core/transfers.ts.
   const today = dayChange(account.equity, account.lastEquity, flows);
   const note = describeFlows(today.flows);
+  const funds = fundsOf(account);
 
   const rows: Array<[string, string]> = [
     ["Account", account.accountNumber],
@@ -43,9 +48,16 @@ export async function run(args: ParsedArgs): Promise<number> {
         `${usdSigned(today.amount)} (${today.pct >= 0 ? "+" : ""}${(today.pct * 100).toFixed(2)}%)`,
       ) + (note ? `  ${today.flows ? c.dim(note) : c.yellow(note)}` : ""),
     ],
-    ["Cash", usd(account.cash)],
-    ["Buying power", usd(account.buyingPower)],
+    ["Cash", usd(funds.cash)],
+    [
+      "Buying power",
+      usd(account.buyingPower) +
+        (funds.margin > 0 ? c.dim(`  includes ${usd(funds.margin)} of margin: money you would borrow`) : ""),
+    ],
   ];
+  if (funds.loan > 0) {
+    rows.push(["Margin loan", c.yellow(usd(funds.loan)) + c.dim("  borrowed now, charged interest")]);
+  }
 
   if (account.daytradingBuyingPower !== null) {
     rows.push(["Day-trade BP", usd(account.daytradingBuyingPower)]);

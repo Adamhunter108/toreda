@@ -174,10 +174,10 @@ it out before you start.
 | `l`     | View and change your risk rules                           |
 | `r`     | Run a scan for opportunities                              |
 | `g`     | See all signals in detail                                 |
-| `w`     | Add or remove stocks from your watchlist                  |
+| `w`     | Add, remove or reorder the stocks on your watchlist       |
 | `c`     | Adjust the scanner's sensitivity                          |
 | `t`     | Change colour theme                                       |
-| `p` `s` | Change the chart period / sort the positions              |
+| `p` `s` | Change the chart period / sort the focused list           |
 | `h`     | Order history                                             |
 | `q`     | Quit                                                      |
 

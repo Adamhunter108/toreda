@@ -3,7 +3,11 @@ import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { getAsset } from "../../core/alpaca";
 import { mutedProps } from "../../core/theme";
-import { addWatchlistSymbol, removeWatchlistSymbol } from "../../core/watchlist";
+import {
+  addWatchlistSymbol,
+  moveWatchlistSymbol,
+  removeWatchlistSymbol,
+} from "../../core/watchlist";
 import { useTheme } from "../theme/ThemeContext";
 
 const VISIBLE = 14;
@@ -14,12 +18,22 @@ const VISIBLE = 14;
  * `a` adds — validating the ticker against Alpaca BEFORE writing, because a
  * typo'd symbol in a watchlist is silent: it simply never produces a signal, and
  * you conclude the market was quiet.
+ *
+ * Reordering: Enter picks up the highlighted symbol, ↑↓ carry it, Enter puts it
+ * down and Esc puts it back where it was. K/J move it one place without picking
+ * it up. That order is what the watchlist panel shows when sorted by "your
+ * order", so the names you watch most can sit at the top of a panel too short
+ * to show them all.
+ *
+ * Not shift+↑↓: macOS Terminal sends a plain arrow for it by default, so it
+ * moved the cursor instead and looked broken. Plain keys work everywhere.
  */
 export function WatchlistManager({
   symbols,
   onChange,
   onClose,
 }: {
+  /** In display order (`Watchlist.ordered`), so moves show where they land. */
   symbols: string[];
   onChange: () => void;
   onClose: () => void;
@@ -29,6 +43,8 @@ export function WatchlistManager({
   const [addMode, setAddMode] = useState(false);
   const [buffer, setBuffer] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  // The symbol picked up with Enter, and where it started (for Esc).
+  const [held, setHeld] = useState<{ symbol: string; from: number } | null>(null);
 
   const n = symbols.length;
   const cur = Math.min(cursor, Math.max(0, n - 1));
@@ -59,6 +75,15 @@ export function WatchlistManager({
     onChange();
   }
 
+  /** Move `s` by `by` places, saving at once, with the cursor following it. */
+  function move(s: string | undefined, by: number): void {
+    const at = s ? symbols.indexOf(s) : -1;
+    if (!s || at === -1 || !moveWatchlistSymbol(s, by)) return;
+    setCursor(Math.max(0, Math.min(n - 1, at + by)));
+    setMsg(null);
+    onChange();
+  }
+
   useInput(
     (input, key) => {
       if (addMode) {
@@ -74,7 +99,25 @@ export function WatchlistManager({
         }
         return;
       }
+      if (held) {
+        // Every step is saved as it happens, so Esc undoes by moving back.
+        if (key.upArrow) move(held.symbol, -1);
+        else if (key.downArrow) move(held.symbol, 1);
+        else if (key.return) {
+          setHeld(null);
+          setMsg(`moved ${held.symbol}`);
+        } else if (key.escape) {
+          move(held.symbol, held.from - symbols.indexOf(held.symbol));
+          setHeld(null);
+        }
+        return;
+      }
       if (key.escape) onClose();
+      else if (key.return && symbols[cur]) {
+        setHeld({ symbol: symbols[cur]!, from: cur });
+        setMsg(null);
+      } else if (input === "K") move(symbols[cur], -1);
+      else if (input === "J") move(symbols[cur], 1);
       else if (key.upArrow) setCursor((c) => Math.max(0, c - 1));
       else if (key.downArrow) setCursor((c) => Math.min(n - 1, c + 1));
       else if (input === "a") {
@@ -92,15 +135,17 @@ export function WatchlistManager({
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={t.border} paddingX={1}>
       <Text bold>
-        Manage watchlist <Text {...mutedProps(t)}>({n} symbols)</Text>
+        Manage watchlist <Text {...mutedProps(t)}>({n} symbols, in your order)</Text>
       </Text>
       {start > 0 ? <Text {...mutedProps(t)}> ↑ more…</Text> : null}
       {view.map((s, i) => {
         const isSel = start + i === cur;
+        const isHeld = held?.symbol === s;
         return (
-          <Text key={s} color={isSel ? t.accent : undefined} bold={isSel}>
-            {isSel ? "› " : "  "}
+          <Text key={s} color={isHeld ? t.info : isSel ? t.accent : undefined} bold={isSel}>
+            {isHeld ? "↕ " : isSel ? "› " : "  "}
             {s}
+            {isHeld ? <Text {...mutedProps(t)}>{"  moving"}</Text> : null}
           </Text>
         );
       })}
@@ -112,13 +157,22 @@ export function WatchlistManager({
             Add symbol: <Text color={t.info}>{buffer || " "}</Text>
             <Text {...mutedProps(t)}>▏ (Enter to add · Esc cancel)</Text>
           </Text>
+        ) : held ? (
+          <Text {...mutedProps(t)}>
+            moving {held.symbol} · ↑↓ move · ⏎ put down · esc put back
+          </Text>
         ) : (
-          <Text {...mutedProps(t)}>a add · d remove · ↑↓ move · esc back</Text>
+          <Text {...mutedProps(t)}>
+            a add · d remove · ↑↓ select · ⏎ pick up to reorder (or K/J) · esc back
+          </Text>
         )}
         {msg ? (
           <Text color={/not a valid/.test(msg) ? t.negative : t.positive}>{msg}</Text>
         ) : null}
       </Box>
+      <Text {...mutedProps(t)}>
+        The panel shows this order when sorted by "your order" (s, with the watchlist focused).
+      </Text>
       <Text {...mutedProps(t)}>
         Positions you hold are always scanned, listed here or not.
       </Text>

@@ -33,17 +33,30 @@ function position(over: Partial<Position> = {}): Position {
   };
 }
 
-test("the summary carries equity, day change, and buying power", () => {
+test("the summary carries equity, day change, and cash", () => {
   const summary = buildSummary(account, NO_FLOWS);
   assert.match(summary, /Portfolio \$1,032\.45/);
-  assert.match(summary, /BP \$3\.45/);
+  assert.match(summary, /Cash \$3\.45/);
+});
+
+// On a margin account buying power is cash plus a loan Alpaca would make. A
+// briefing that quotes it as "BP $2,400" reads as money you have.
+test("the summary quotes cash, not buying power that includes margin", () => {
+  const summary = buildSummary({ ...account, cash: 400, buyingPower: 2_400 }, NO_FLOWS);
+  assert.match(summary, /\| Cash \$400\.00$/);
+  assert.doesNotMatch(summary, /2,400/);
+});
+
+test("money already borrowed is named as a margin loan", () => {
+  const summary = buildSummary({ ...account, cash: -250, buyingPower: 900 }, NO_FLOWS);
+  assert.match(summary, /\| Margin loan \$250\.00$/);
 });
 
 // A bare "-0.19" gets read back as a percentage, which misreads the day by a
 // factor of a hundred. The dollar sign is doing real work.
 test("the day change carries a dollar sign as well as a percent", () => {
   const summary = buildSummary(account, NO_FLOWS);
-  assert.match(summary, /Day \+\$8\.14 \(\+0\.79%\) \| BP/);
+  assert.match(summary, /Day \+\$8\.14 \(\+0\.79%\) \| Cash/);
 });
 
 test("a losing day renders its sign correctly on both figures", () => {
@@ -62,7 +75,7 @@ test("a deposit is taken out of the day change, and said so", () => {
     { ...account, equity: 4960, lastEquity: 4000 },
     { deposits: 1000, withdrawals: 0, net: 1000 },
   );
-  assert.match(summary, /Day -\$40\.00 \(-1\.00%\) excl\. \+\$1,000 deposited \| BP/);
+  assert.match(summary, /Day -\$40\.00 \(-1\.00%\) excl\. \+\$1,000 deposited \| Cash/);
 });
 
 test("unchecked transfers are flagged rather than passed off as a clean day", () => {

@@ -35,7 +35,10 @@ export interface OrderResult {
 
 export interface OrderContext {
   equity: number;
+  /** Alpaca's figure. On a margin account it includes borrowing. */
   buyingPower: number;
+  /** What a buy can spend without borrowing: `fundsOf(account).cash`. */
+  cash: number;
   heldQty: number;
   heldValue: number;
   /** 0 means unknown. */
@@ -72,6 +75,10 @@ function money(n: number): string {
  * warning is a policy you set for yourself and may knowingly override —
  * concentration is your call, and a tool that refuses your own judgment gets
  * worked around rather than heeded.
+ *
+ * Borrowing is a warning too. Alpaca allows a buy up to buying power, which on
+ * a margin account is far more than your cash. Using margin can be a choice,
+ * but a buy should never borrow without saying so.
  */
 export function assessOrder(req: OrderRequest, ctx: OrderContext): OrderAssessment {
   const qty = Number(req.qty) || 0;
@@ -93,6 +100,12 @@ export function assessOrder(req: OrderRequest, ctx: OrderContext): OrderAssessme
     } else {
       if (estCost > ctx.buyingPower) {
         blocks.push(`est. cost ${money(estCost)} exceeds buying power ${money(ctx.buyingPower)}`);
+      } else if (estCost > ctx.cash) {
+        const cash = Math.max(0, ctx.cash);
+        warnings.push(
+          `borrows ${money(estCost - cash)} on margin (you have ${money(cash)} in cash) — ` +
+            `a loan charged interest, which Alpaca can sell your stocks to repay if prices fall`,
+        );
       }
       if (ctx.equity > 0) {
         const postWeight = (ctx.heldValue + estCost) / ctx.equity;

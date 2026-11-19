@@ -34,7 +34,7 @@ const RULES: RiskRules = {
 };
 
 function review(positions: Record<string, PositionInfo>) {
-  const account: AccountState = { positions, buyingPower: 0, portfolioValue: PORTFOLIO };
+  const account: AccountState = { positions, cash: 0, portfolioValue: PORTFOLIO };
   return reviewPositions(account, RULES);
 }
 
@@ -94,12 +94,12 @@ function withStops(stopOverrides: RiskRules["stopOverrides"]): RiskRules {
 }
 
 function reviewWith(rules: RiskRules, positions: Record<string, PositionInfo>, today = TODAY) {
-  const account: AccountState = { positions, buyingPower: 0, portfolioValue: PORTFOLIO };
+  const account: AccountState = { positions, cash: 0, portfolioValue: PORTFOLIO };
   return reviewPositions(account, rules, today);
 }
 
 function heldWith(rules: RiskRules, positions: Record<string, PositionInfo>, today = TODAY) {
-  const account: AccountState = { positions, buyingPower: 0, portfolioValue: PORTFOLIO };
+  const account: AccountState = { positions, cash: 0, portfolioValue: PORTFOLIO };
   return heldUnderExceptions(account, rules, today);
 }
 

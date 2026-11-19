@@ -112,6 +112,23 @@ signal, and you quietly conclude the market was uneventful.
 From the dashboard, press `w`. From a text editor, open
 `config/watchlist.json` — every route writes the same file.
 
+### Keeping specific names in view
+
+The dashboard's watchlist panel is short, so with a long list most names sit
+below the fold. Two keys decide which ones you see:
+
+- **`s`, with the watchlist focused** (`tab` to it), cycles the panel's order:
+  *by move* (the biggest move today, up or down), *your order*, and *A–Z*. The
+  choice is saved in `config/ui.json`, so it survives a restart.
+- **`w`, then `enter`** picks up the highlighted symbol. `↑`/`↓` carry it,
+  `enter` puts it down, and `esc` puts it back where it was. (`K`/`J` move it
+  one place without picking it up.) That is *your order*: put the names you
+  watch most at the top.
+
+Your order is stored as an `order` list in `config/watchlist.json`. It only
+affects display. Sectors stay as they are, and a symbol added without a place
+in the order goes to the end.
+
 **Positions you hold are always scanned**, listed or not. You cannot stop
 watching something you own by deleting a line.
 

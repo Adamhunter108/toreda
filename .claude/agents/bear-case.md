@@ -48,7 +48,8 @@ large number attached.
 
 **The book.** What does this do to concentration, in the symbol and its sector?
 Four positions that fall together is one position wearing four tickers. Does it
-spend buying power that a breached stop elsewhere has a better claim on?
+spend cash that a breached stop elsewhere has a better claim on? Does it borrow on
+margin? A buy past the cash is a loan, and the preview says so.
 
 **The downside.** Where is the stop, in dollars? Is that a loss they have
 actually agreed to take? What does the position look like down 20%?

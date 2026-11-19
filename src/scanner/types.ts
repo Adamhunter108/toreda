@@ -102,7 +102,11 @@ export interface SymbolBars {
 
 export interface AccountState {
   positions: Record<string, PositionInfo>;
-  buyingPower: number;
+  /**
+   * What a buy can spend without borrowing (`fundsOf(account).cash`). Not
+   * buying power, which on a margin account includes what Alpaca would lend.
+   */
+  cash: number;
   portfolioValue: number;
 }
 

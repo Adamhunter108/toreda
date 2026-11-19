@@ -16,8 +16,9 @@ position past its ceiling. These outrank every opportunity below them. If there
 are none, say so in one line and move on. Then anything in `stopExceptions`: a
 position held past the default stop by a dated exception, with its end date.
 
-**2. Where the book stands.** Total equity, today's move, buying power. Then any
-position worth a mention — an unusual move, something approaching its ceiling.
+**2. Where the book stands.** Total equity, today's move, cash (`funds.cash`, not
+buying power, which includes margin). Then any position worth a mention — an
+unusual move, something approaching its ceiling.
 Use `changeToday` for today and `unrealizedPlPct` for lifetime, and never
 confuse the two.
 
@@ -25,7 +26,7 @@ confuse the two.
 the scanner scored it that way (quote the breakdown), and **what would make it
 wrong**. A signal you can't argue against is one you haven't examined.
 
-**4. Anything I can't act on.** If buying power is low, say which signals are
+**4. Anything I can't act on.** If cash is low, say which signals are
 unactionable rather than pitching trades I can't take.
 
 Then stop. Do not place orders, and do not suggest I should.

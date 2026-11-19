@@ -9,6 +9,7 @@
 import { getAccount, getPositions } from "../core/alpaca";
 import { loadConfig } from "../core/config";
 import { demoScanResult, isDemoMode } from "../core/demo";
+import { fundsOf } from "../core/funds";
 import { getDailyBars, getNews, type NewsItem } from "../core/market-data";
 import { loadRiskRules, type RiskRules } from "../core/risk";
 import { loadScannerConfig, type ScannerConfig } from "../core/scanner-config";
@@ -44,7 +45,7 @@ async function fetchAccountState(health: SourceHealth): Promise<AccountState> {
     const [account, positions] = await Promise.all([getAccount(), getPositions()]);
     const state: AccountState = {
       positions: {},
-      buyingPower: account.buyingPower,
+      cash: fundsOf(account).cash,
       portfolioValue: account.portfolioValue,
     };
     for (const p of positions) {
@@ -61,7 +62,7 @@ async function fetchAccountState(health: SourceHealth): Promise<AccountState> {
     // Scanning without position context is degraded but still useful; failing
     // the whole scan because the account endpoint blipped is not.
     health.record("account unavailable — scanning without position context");
-    return { positions: {}, buyingPower: 0, portfolioValue: 0 };
+    return { positions: {}, cash: 0, portfolioValue: 0 };
   }
 }
 

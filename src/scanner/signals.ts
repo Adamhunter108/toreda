@@ -278,12 +278,13 @@ export function applyPositionContext(
 
   if (!position) {
     // Can we even act on a buy? Flag it rather than pitching the unactionable.
-    if (signal.action === "buy" && account.buyingPower < 25) {
+    // Cash, not buying power: margin would make almost any buy look affordable.
+    if (signal.action === "buy" && account.cash < 25) {
       return {
         ...signal,
         catalysts: [
           ...signal.catalysts,
-          `⚠️ Buying power $${account.buyingPower.toFixed(2)} — would need to free up cash`,
+          `⚠️ Only $${account.cash.toFixed(2)} in cash — buying means selling something or borrowing on margin`,
         ],
       };
     }
@@ -322,9 +323,9 @@ export function applyPositionContext(
     );
   }
 
-  if (signal.action === "buy" && account.buyingPower < 25) {
+  if (signal.action === "buy" && account.cash < 25) {
     out.catalysts.push(
-      `⚠️ Buying power $${account.buyingPower.toFixed(2)} — cannot add without selling`,
+      `⚠️ Only $${account.cash.toFixed(2)} in cash — cannot add without selling or borrowing on margin`,
     );
   }
 

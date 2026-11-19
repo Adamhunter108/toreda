@@ -27,7 +27,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setTheme = useCallback((name: string) => {
     if (!(name in THEMES)) return;
     setThemeName(name);
-    saveUiConfig({ theme: name });
+    saveUiConfig({ theme: name }); // merges: the watchlist sort is kept
   }, []);
 
   const theme = THEMES[themeName] ?? THEMES[DEFAULT_THEME]!;

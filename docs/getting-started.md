@@ -128,7 +128,7 @@ several, and that's correct.
 
 ```bash
 npm run toreda -- portfolio     # your positions (empty at first)
-npm run toreda -- account       # buying power and equity
+npm run toreda -- account       # cash, buying power and equity
 npm run toreda -- quote NVDA    # a live quote
 npm run toreda -- watchlist     # everything you're tracking, biggest movers first
 ```
@@ -157,8 +157,8 @@ Orders are two steps by design. The first sends nothing:
 npm run toreda -- order NVDA buy 1
 ```
 
-You'll see the estimated cost, your buying power, and any risk warnings, ending
-with **"Preview only — nothing sent."**
+You'll see the estimated cost, your cash, and any risk warnings (including one if
+the buy would borrow on margin), ending with **"Preview only — nothing sent."**
 
 To actually place it:
 

@@ -157,10 +157,10 @@ const buySignal: OpportunitySignal = {
   catalysts: [],
 };
 
-function account(position?: PositionInfo, buyingPower = 5_000): AccountState {
+function account(position?: PositionInfo, cash = 5_000): AccountState {
   return {
     positions: position ? { NVDA: position } : {},
-    buyingPower,
+    cash,
     portfolioValue: 10_000,
   };
 }
@@ -209,9 +209,14 @@ test("the stop wins over the concentration trim", () => {
   assert.equal(out.action, "sell");
 });
 
-test("a buy with no buying power is flagged rather than silently pitched", () => {
+test("a buy with no cash is flagged rather than silently pitched", () => {
   const out = applyPositionContext(buySignal, account(undefined, 3), RULES);
-  assert.match(out.catalysts.join(" "), /Buying power/);
+  assert.match(out.catalysts.join(" "), /Only \$3\.00 in cash/);
+});
+
+test("adding to a held position with no cash is flagged too", () => {
+  const out = applyPositionContext(buySignal, account(held(0.1, 5), 3), RULES);
+  assert.match(out.catalysts.join(" "), /cannot add without selling or borrowing/);
 });
 
 test("held positions carry their size and P&L into the catalysts", () => {
