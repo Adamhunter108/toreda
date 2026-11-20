@@ -143,6 +143,13 @@ export async function discoverCandidates(
       reject("stale/dead ticker");
       return false;
     }
+    // A move since today's open is not comparable with everyone else's move
+    // since yesterday's close, and there is no previous session to judge
+    // liquidity by. Saying so beats letting it fail the liquidity gate below.
+    if (snap.sinceOpen) {
+      reject("no previous session (first day of trading?)");
+      return false;
+    }
     if (snap.prevVolume * snap.prevClose < cfg.discovery.minDollarVolume) {
       reject("illiquid");
       return false;

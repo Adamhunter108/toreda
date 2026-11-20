@@ -39,6 +39,7 @@ import {
   useCloses,
   useEquityHistory,
   useRealized,
+  useStopBases,
   useSnapshots,
   useSymbolStats,
 } from "./hooks/useMarketData";
@@ -58,6 +59,7 @@ import {
   zoomedPositionColumns,
 } from "./layout";
 import { useTheme } from "./theme/ThemeContext";
+import { watchRows } from "./watch-rows";
 import { nextWatchlistSort, sortWatchlist, WATCHLIST_SORT_LABELS } from "./watchlist-sort";
 
 /** Equity chart periods cycled with `p` — [Alpaca period, label, timeframe]. */
@@ -111,12 +113,20 @@ export function App() {
   const { rules: risk, reload: reloadRisk, save: saveRisk } = useRiskRules();
   const tradeMode = useMemo(() => loadConfig().mode, []);
 
+  const stopBases = useStopBases(rawPositions, risk);
+
   // ONE set of numbers for every panel — see ./book.ts for why.
   const book = useMemo(
-    () => markBook(account, rawPositions, prices, risk, flows),
-    [account, rawPositions, prices, risk, flows],
+    () => markBook(account, rawPositions, prices, risk, flows, stopBases?.bases),
+    [account, rawPositions, prices, risk, flows, stopBases],
   );
-  const alerts = useMemo(() => bookAlerts(book, risk), [book, risk]);
+  // With sized stops, a check before their history loads would measure every
+  // stop from entry at the default, and flash alerts that then vanish.
+  const stopsPending = risk.stopSizing !== null && rawPositions.length > 0 && stopBases === null;
+  const alerts = useMemo(
+    () => (stopsPending ? null : bookAlerts(book, risk)),
+    [book, risk, stopsPending],
+  );
   const breaches = useMemo(() => breachesBySymbol(alerts), [alerts]);
   // Past the default stop but held under a dated exception: shown, not alerted.
   const excepted = useMemo(() => bookExceptions(book, risk), [book, risk]);
@@ -151,8 +161,8 @@ export function App() {
   // config/ui.json so "your order" is still there next launch.
   const [wlSort, setWlSort] = useState<WatchlistSort>(() => loadUiConfig().watchlistSort);
   const sortedMovers = useMemo(
-    () => sortWatchlist(movers, wlSort, wl.ordered),
-    [movers, wlSort, wl.ordered],
+    () => sortWatchlist(watchRows(movers, wl.symbols), wlSort, wl.ordered),
+    [movers, wl.symbols, wlSort, wl.ordered],
   );
   const wlSortLabel = WATCHLIST_SORT_LABELS[wlSort];
   const sortedSignals = useMemo(() => {
@@ -392,7 +402,6 @@ export function App() {
           row={r}
           closes={closes[r.symbol] ?? []}
           stats={symbolStats}
-          stopLossPct={risk.stopLossPct}
           breach={breaches[r.symbol]}
           availCols={cols}
         />

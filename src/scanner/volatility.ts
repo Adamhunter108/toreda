@@ -11,6 +11,43 @@ export function pctChange(bar: SymbolBars): number {
 }
 
 /**
+ * How many of the window's first closes a trend is measured from.
+ *
+ * The window opens wherever the calendar puts it. When that happens to be a
+ * one-day crash, first-close-to-last reads the rebound from that single day as
+ * a trend: a stock down 8% today, below its 50-day average, once scored a
+ * momentum buy at 9 for "+20.5% over 11 trading days", because the window
+ * opened on the day it fell 17.5%.
+ */
+export const TREND_STARTS = 3;
+
+export interface WindowMove {
+  pct: number;
+  /** Closes from the start used to the last, inclusive. */
+  days: number;
+}
+
+/**
+ * The window move from each of its first few closes to the last.
+ *
+ * A trend should hold whichever of those days you start counting from, so
+ * callers take the most conservative one: the smallest rise for momentum, the
+ * shallowest fall for a pullback. A move that only exists from one particular
+ * start day is about that day, not a trend.
+ */
+export function windowMoves(bar: SymbolBars, starts = TREND_STARTS): WindowMove[] {
+  const last = bar.closes[bar.closes.length - 1];
+  if (last === undefined) return [];
+  const n = Math.min(starts, bar.closes.length - 1);
+  const moves: WindowMove[] = [];
+  for (let i = 0; i < n; i++) {
+    const first = bar.closes[i]!;
+    if (first > 0) moves.push({ pct: ((last - first) / first) * 100, days: bar.closes.length - i });
+  }
+  return moves;
+}
+
+/**
  * Standard deviation of daily percentage returns.
  *
  * Null when there are too few bars to estimate one honestly — a two-day sample

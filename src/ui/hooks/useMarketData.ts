@@ -12,6 +12,8 @@ import {
   type SymbolStats,
 } from "../../core/market-data";
 import { EMPTY_HISTORY, type EquityHistory } from "../../core/performance";
+import type { RiskRules } from "../../core/risk";
+import { loadStopBases, type StopBases } from "../../scanner/stops";
 
 /**
  * Run `fetcher` now and on an interval, keeping the last good value.
@@ -126,5 +128,26 @@ export function useSnapshots(symbols: string[], pollMs = 60_000): Snapshot[] {
     pollMs,
     [key, pollMs],
     symbols.length > 0,
+  );
+}
+
+/**
+ * What each held stop is measured from: purchase dates and price history.
+ * Slow, since highs move once a day and purchase dates only when you trade.
+ * Null until the first load, or when stops are not sized.
+ */
+export function useStopBases(
+  positions: Array<{ symbol: string; qty: number }>,
+  risk: RiskRules,
+  pollMs = 1_800_000,
+): StopBases | null {
+  const key = positions.map((p) => `${p.symbol}:${p.qty}`).sort().join(",");
+  const rulesKey = JSON.stringify([risk.stopSizing, risk.coreSymbols]);
+  return usePolled<StopBases | null>(
+    () => loadStopBases(positions, risk),
+    null,
+    pollMs,
+    [key, rulesKey, pollMs],
+    risk.stopSizing !== null && positions.length > 0,
   );
 }

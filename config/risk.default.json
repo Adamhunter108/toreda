@@ -39,12 +39,31 @@
     "      \"until\": \"2026-02-06\",",
     "      \"reason\": \"Holding through the earnings report; reassess on the results.\"",
     "    }",
-    "  }"
+    "  }",
+    "",
+    "stopSizing       Optional. Sizes each stock's stop to how much it moves, and",
+    "                 measures it from the high since you bought. Off (null) by",
+    "                 default; stopLossPct then applies to everything, from entry.",
+    "                 With it on, stopLossPct is the stop for a stock with too",
+    "                 little history to size one. See docs/scanner.md.",
+    "",
+    "  \"stopSizing\": {",
+    "    \"volMultiple\": 2,      stop = 2x the stock's typical two-week move,",
+    "    \"narrowestPct\": -8,    but never tighter than this",
+    "    \"widestPct\": -30,      or wider than this,",
+    "    \"trailing\": true       measured from the highest close since you bought",
+    "  }",
+    "",
+    "coreSymbols      Broad funds held as the core of the account. No stop at all:",
+    "                 selling an index fund into a correction is the opposite of",
+    "                 why it is held. Example: [\"VOO\", \"SCHD\"]"
   ],
 
   "stopLossPct": -7,
   "defaultMaxWeight": 0.25,
   "trimProfitPct": 25,
+  "stopSizing": null,
+  "coreSymbols": [],
 
   "overrides": {},
   "stopOverrides": {}

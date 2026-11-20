@@ -73,12 +73,19 @@ async function show(json: boolean): Promise<number> {
   const snapshots = await getSnapshots(watchlist.symbols);
   const bySymbol = new Map(snapshots.map((s) => [s.symbol, s]));
 
+  // Symbols the feed returned nothing for. Named, so a gap is never mistaken
+  // for a symbol that is not on the list.
+  const missing = watchlist.symbols.filter((s) => !bySymbol.has(s));
+
   if (json) {
     process.stdout.write(
       JSON.stringify({
         symbols: watchlist.symbols,
         sectors: watchlist.sectorOf,
+        // A snapshot with `sinceOpen: true` had no previous session, so its
+        // changePct is the move since today's open, not since yesterday's close.
         snapshots,
+        missing,
       }),
     );
     return 0;
@@ -98,7 +105,8 @@ async function show(json: boolean): Promise<number> {
     return [
       c.bold(symbol),
       usd(snap.price),
-      pl(snap.changePct, pctRaw(snap.changePct)),
+      // No previous close: the move is since today's open, and says so.
+      (snap.sinceOpen ? c.dim("since open ") : "") + pl(snap.changePct, pctRaw(snap.changePct)),
       c.dim(sector),
     ];
   });
@@ -116,6 +124,13 @@ async function show(json: boolean): Promise<number> {
     ),
     "",
   );
+  if (snapshots.some((s) => s.sinceOpen)) {
+    out(c.dim("  since open: no previous session to compare with, usually a stock's first day."));
+  }
+  if (missing.length > 0) {
+    out(c.dim(`  no data: the market data feed returned nothing for ${missing.join(", ")}.`));
+  }
+  if (missing.length > 0 || snapshots.some((s) => s.sinceOpen)) out("");
   return 0;
 }
 

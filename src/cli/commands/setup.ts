@@ -287,6 +287,8 @@ async function stepRisk(): Promise<RiskRules> {
     trimProfitPct,
     overrides: {},
     stopOverrides: {},
+    stopSizing: DEFAULT_RISK_RULES.stopSizing,
+    coreSymbols: DEFAULT_RISK_RULES.coreSymbols,
   };
 }
 

@@ -36,8 +36,13 @@ export function RulesStrip({
   const t = useTheme();
   const nOverrides = Object.keys(rules.overrides).length;
   const nStops = Object.keys(rules.stopOverrides).length;
+  const sizing = rules.stopSizing;
+  const stop = sizing
+    ? `stops ${sizing.volMultiple}× swings, ${sizing.narrowestPct}% to ${sizing.widestPct}%` +
+      (sizing.trailing ? " from high" : "")
+    : `stop ${rules.stopLossPct}%`;
   const summary =
-    `stop ${rules.stopLossPct}% · ceiling ${Math.round(rules.defaultMaxWeight * 100)}%` +
+    `${stop} · ceiling ${Math.round(rules.defaultMaxWeight * 100)}%` +
     (nOverrides ? ` · ${nOverrides} override${nOverrides === 1 ? "" : "s"}` : "") +
     (nStops ? ` · ${nStops} stop exception${nStops === 1 ? "" : "s"}` : "") +
     " · l rules";
@@ -46,7 +51,7 @@ export function RulesStrip({
     return (
       <Box paddingX={1}>
         <Text {...mutedProps(t)} wrap="truncate-end">
-          ◌ Rules not checked yet — waiting for the account
+          ◌ Rules not checked yet — loading the account{rules.stopSizing ? " and stop history" : ""}
         </Text>
       </Box>
     );
@@ -89,7 +94,8 @@ export function RulesStrip({
           <Text key={line.h.symbol + " held"} color={t.warning} wrap="truncate-end">
             <Text bold>◆ {line.h.symbol} held past your {line.h.defaultPct}% stop</Text>
             {"  "}
-            {`${line.h.plPct.toFixed(1)}% from entry · exception to ${line.h.stopPct}%` +
+            {`${line.h.belowPct.toFixed(1)}% from ${line.h.from === "high" ? "its high" : "entry"}` +
+              ` · exception to ${line.h.stopPct}%` +
               `${line.h.until ? ` until ${line.h.until}` : ""}: ${line.h.reason}`}
           </Text>
         ),

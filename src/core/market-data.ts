@@ -38,7 +38,7 @@ const num = (x: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-interface RawSnapshot {
+export interface RawSnapshot {
   latestTrade?: { p?: number };
   minuteBar?: { c?: number };
   dailyBar?: { o?: number; h?: number; l?: number; c?: number; v?: number; t?: string };
@@ -78,11 +78,53 @@ export interface Snapshot {
   symbol: string;
   price: number;
   changePct: number;
+  /** 0 when `sinceOpen`: there was no previous session. */
   prevClose: number;
   /** Previous COMPLETE session's volume. The intraday bar is partial. */
   prevVolume: number;
   dailyVolume: number;
   barDate: string;
+  /**
+   * No previous session to compare with: a stock's first day of trading, or
+   * one the IEX feed saw no trades in last session. `changePct` is then the
+   * move since today's open, and must be labelled that way, not as today's
+   * change.
+   */
+  sinceOpen?: true;
+}
+
+/**
+ * One symbol's snapshot, or null when there is nothing to price it from.
+ *
+ * Without a previous close the move is measured from today's open, not
+ * dropped. Dropping it hid a new listing from the watchlist on its first
+ * day, which looks exactly like a symbol that was never added.
+ */
+export function parseSnapshot(symbol: string, snap: RawSnapshot): Snapshot | null {
+  const daily = snap.dailyBar ?? {};
+  const prev = snap.prevDailyBar ?? {};
+  const price = num(snap.latestTrade?.p) || num(daily.c) || num(snap.minuteBar?.c);
+  if (!price) return null;
+  const today = { symbol, price, dailyVolume: num(daily.v), barDate: String(daily.t ?? "") };
+
+  const prevClose = num(prev.c);
+  if (prevClose) {
+    return {
+      ...today,
+      changePct: ((price - prevClose) / prevClose) * 100,
+      prevClose,
+      prevVolume: num(prev.v),
+    };
+  }
+  const open = num(daily.o);
+  if (!open) return null;
+  return {
+    ...today,
+    changePct: ((price - open) / open) * 100,
+    prevClose: 0,
+    prevVolume: 0,
+    sinceOpen: true,
+  };
 }
 
 export async function getSnapshots(
@@ -98,20 +140,8 @@ export async function getSnapshots(
   for (const symbol of Object.keys(data)) {
     const snap = data[symbol];
     if (!snap || typeof snap !== "object") continue;
-    const daily = snap.dailyBar ?? {};
-    const prev = snap.prevDailyBar ?? {};
-    const price = num(snap.latestTrade?.p) || num(daily.c) || num(snap.minuteBar?.c);
-    const prevClose = num(prev.c);
-    if (!price || !prevClose) continue;
-    out.push({
-      symbol,
-      price,
-      changePct: ((price - prevClose) / prevClose) * 100,
-      prevClose,
-      prevVolume: num(prev.v),
-      dailyVolume: num(daily.v),
-      barDate: String(daily.t ?? ""),
-    });
+    const parsed = parseSnapshot(symbol, snap);
+    if (parsed) out.push(parsed);
   }
   return out;
 }

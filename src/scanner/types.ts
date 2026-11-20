@@ -1,5 +1,7 @@
 // Scanner data shapes.
 
+import type { StopBasis } from "../core/risk";
+
 export type Action = "buy" | "sell" | "trim" | "watch";
 
 export type OpportunityType = "momentum" | "value_play" | "news_catalyst" | "social_buzz";
@@ -15,6 +17,12 @@ export interface PositionInfo {
   unrealizedPlPct: number;
   /** Share of total portfolio value, 0–1. */
   weight: number;
+  /** Last price. Needed for a stop measured from the high. */
+  price?: number;
+  /** Average price paid per share. */
+  avgEntry?: number;
+  /** What the stop is measured from, when stops are sized (see stops.ts). */
+  stopBasis?: StopBasis;
 }
 
 export interface OpportunitySignal {
@@ -51,10 +59,14 @@ export interface StopException {
   symbol: string;
   /** Unrealized P&L since entry, percent (−22.2 means −22.2%). */
   plPct: number;
-  /** The default stop it is past. */
+  /** The stop it is past: its own sized stop, or the default. */
   defaultPct: number;
   /** The exception's stop, which it is not yet past. */
   stopPct: number;
+  /** What both stops are measured from: entry, or the high since you bought. */
+  from: "entry" | "high";
+  /** How far below that it is now, percent. Equals `plPct` from entry. */
+  belowPct: number;
   until: string;
   decided: string;
   reason: string;

@@ -53,7 +53,7 @@ has run `npm link`.
 
 **Every read command takes `--json`.** Use it. The tables are for humans; the
 JSON is for you, and it carries fields the table omits — `portfolio --json`
-includes each position's weight and its concentration ceiling, `quote --json`
+includes each position's weight, its concentration ceiling and its stop, `quote --json`
 separates unknown tickers into `missing`, `scan --json` includes `degraded`.
 
 Ad-hoc analysis is welcome: write a throwaway script under the scratchpad and
@@ -101,6 +101,9 @@ Explicitly *not* sufficient on their own:
 
 ```
 Loss   → at or past the stop (default −7%), sell. Not "reassess". Sell.
+         With `stopSizing` on, each stock's stop is sized to how much it
+         moves and measured from its high since purchase; core funds
+         (`coreSymbols`) have none. Read `stop` in `portfolio --json`.
 Profit → take some off at the first target; let the rest run.
 Size   → a position past its ceiling gets trimmed back to the ceiling.
          A win that becomes a concentration risk is no longer a win.

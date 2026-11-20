@@ -169,7 +169,13 @@ function configFileChecks(): Check[] {
     status: "ok",
     label: "Risk rules",
     detail:
-      `stop ${risk.stopLossPct}%, max ${(risk.defaultMaxWeight * 100).toFixed(0)}% per symbol` +
+      (risk.stopSizing
+        ? `stops ${risk.stopSizing.volMultiple}× each stock's two-week move ` +
+          `(${risk.stopSizing.narrowestPct}% to ${risk.stopSizing.widestPct}%` +
+          `${risk.stopSizing.trailing ? ", from the high" : ""}; ${risk.stopLossPct}% unsized)`
+        : `stop ${risk.stopLossPct}%`) +
+      `, max ${(risk.defaultMaxWeight * 100).toFixed(0)}% per symbol` +
+      (risk.coreSymbols.length ? `, core ${risk.coreSymbols.join("/")} (no stop)` : "") +
       (overrideCount ? `, ${overrideCount} override${overrideCount > 1 ? "s" : ""}` : "") +
       (stopCount ? `, ${stopCount} stop exception${stopCount > 1 ? "s" : ""}` : ""),
   });

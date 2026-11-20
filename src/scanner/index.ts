@@ -16,6 +16,7 @@ import { loadScannerConfig, type ScannerConfig } from "../core/scanner-config";
 import { loadWatchlist } from "../core/watchlist";
 import { discoverCandidates } from "./discovery";
 import { heldUnderExceptions, reviewPositions } from "./review";
+import { loadStopBases } from "./stops";
 import {
   deriveNewsSignals,
   derivePriceSignals,
@@ -55,6 +56,8 @@ async function fetchAccountState(health: SourceHealth): Promise<AccountState> {
         unrealizedPl: p.unrealizedPl,
         unrealizedPlPct: p.unrealizedPlPct,
         weight: account.portfolioValue ? p.marketValue / account.portfolioValue : 0,
+        price: p.currentPrice,
+        avgEntry: p.avgEntry,
       };
     }
     return state;
@@ -124,6 +127,18 @@ export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
 
   const watchlist = loadWatchlist();
   const account = await fetchAccountState(health);
+
+  // Stops sized to each stock need its purchase date and price history.
+  if (risk.stopSizing && Object.keys(account.positions).length > 0) {
+    progress("Checking purchase history for stops…");
+    const held = Object.entries(account.positions).map(([symbol, p]) => ({ symbol, qty: p.qty }));
+    const { bases, problem } = await loadStopBases(held, risk);
+    if (problem) health.record(problem);
+    for (const [symbol, basis] of Object.entries(bases)) {
+      const position = account.positions[symbol];
+      if (position) position.stopBasis = basis;
+    }
+  }
 
   // The universe is the watchlist PLUS anything held. You cannot stop watching
   // something you own by deleting a line from a config file.

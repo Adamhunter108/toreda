@@ -37,7 +37,12 @@ look identical.
 
 ### Momentum
 
-Price rose at least `momentumPct` (5%) across the lookback window.
+Price rose at least `momentumPct` (5%) across the lookback window, **counting
+from each of the window's first three closes**. The move must clear the bar from
+all three, and the smallest is the one reported. The window opens wherever the
+calendar puts it; when that was a one-day crash, first-close-to-last read the
+rebound from that single day as a trend, and a stock down 8% on the day scored
+a momentum buy at 9.
 
 ```
 +5  momentum base
@@ -51,11 +56,16 @@ is partial while the market is open, then scaled by how much of the session has
 elapsed. Without that scaling a 10am scan compares two hours of volume against
 full prior days and concludes nothing is confirmed.
 
+Heavy volume confirms only on a day the price **rose**. On a down day it is
+selling, so it scores −1 as "heavy volume on a down day".
+
 Action: `buy`.
 
 ### Value play
 
-Price fell at least `valuePullbackPct` (−8%) across the window.
+Price fell at least `valuePullbackPct` (−8%) across the window, counting from
+each of its first three closes, the same way: a window that opens on a one-day
+spike does not turn the drop back into a pullback.
 
 ```
 +6  pullback base
@@ -168,7 +178,8 @@ Two rules, from `config/risk.json`:
 
 - **STOP LOSS** — at or past `stopLossPct` (default −7%) from entry, or the
   symbol's own stop while a stop exception is in force. Boundary inclusive:
-  exactly −7% trips it.
+  exactly −7% trips it. With sized stops on, each stock gets its own stop
+  measured from its high (below).
 - **CONCENTRATION** — above its ceiling, either `defaultMaxWeight` (25%) or a
   per-symbol override.
 
@@ -185,6 +196,44 @@ A position past the default stop but held by an exception is not a breach, but
 it is never silent: `scan` lists it under "Held past your stop" (and in
 `stopExceptions` in `--json`), and the dashboard's rules strip shows it in the
 warning colour with its end date and reason.
+
+### Sized stops, measured from the high
+
+One stop percentage fits nothing well. −10% is a market correction for an
+index fund and two ordinary days for a volatile chip stock. Measured from
+entry, it is also silent while a winner gives its gain back: a position up 80%
+has its stop half the price away.
+
+`stopSizing` in `config/risk.json` fixes both:
+
+```json
+"stopSizing": { "volMultiple": 2, "narrowestPct": -8, "widestPct": -30, "trailing": true }
+```
+
+- **Width:** `volMultiple` times the stock's typical two-week move (daily
+  volatility × √10), kept between `narrowestPct` and `widestPct`.
+- **Fixed when you buy:** the width comes from the 60 trading days *before* the
+  purchase. A crash raises a stock's volatility, and a width recomputed after
+  one would widen exactly when it should fire.
+- **From the high:** with `trailing`, the stop is measured from the highest
+  close since you bought, when that is above your entry. Today's bar is left
+  out until it closes.
+
+The purchase date comes from your fill history: the last buy that took the
+holding up from nothing. When the fills cannot account for the shares held
+(history too short, or a split), or there are fewer than 20 trading days before
+the purchase (a new listing), the stop falls back to `stopLossPct`, and says
+why. If the history cannot be fetched at all, the scan reports itself degraded.
+
+A stop exception works the same way: its percentage is measured from the same
+point, and it is looser or tighter than the stock's own sized stop, not the
+default.
+
+**Core funds** listed in `coreSymbols` have no stop at all. Selling an index
+fund into a correction is the opposite of why it is held.
+
+`toreda portfolio` shows each stop in a STOP column (↑ when it is measured from
+the high), and `portfolio --json` includes it per position.
 
 ---
 

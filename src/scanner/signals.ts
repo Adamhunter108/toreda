@@ -2,8 +2,9 @@
 
 import type { NewsItem } from "../core/market-data";
 import type { RiskRules } from "../core/risk";
-import { maxWeightFor, stopFor } from "../core/risk";
+import { belowAnchorPct, isPastStop, maxWeightFor } from "../core/risk";
 import type { ScannerConfig } from "../core/scanner-config";
+import { describeDrop, positionStop, priceOf } from "./review";
 import { score } from "./score";
 import type { SocialPost } from "./sources/stocktwits";
 import { aggregateTone } from "./tone";
@@ -13,7 +14,7 @@ import type {
   SymbolBars,
   Universe,
 } from "./types";
-import { confirmationThresholdPct, pctChange, sessionFraction } from "./volatility";
+import { confirmationThresholdPct, pctChange, sessionFraction, windowMoves } from "./volatility";
 
 /** Minimum tagged posts before a social lean means anything. */
 const MIN_SOCIAL_SAMPLE = 8;
@@ -46,23 +47,39 @@ export function derivePriceSignals(
   for (const [symbol, data] of Object.entries(bars)) {
     if (data.closes.length < 3) continue;
 
-    const pct = pctChange(data);
-    const tradingDays = data.closes.length;
+    // The most conservative reading of the window in each direction (see
+    // windowMoves): a trend has to hold whichever early day you count from.
+    const moves = windowMoves(data);
+    if (moves.length === 0) continue;
+    const rise = moves.reduce((a, b) => (b.pct < a.pct ? b : a));
+    const fall = moves.reduce((a, b) => (b.pct > a.pct ? b : a));
 
     const volHistory = data.volumes.slice(0, -1);
     const avgVol = volHistory.reduce((a, b) => a + b, 0) / Math.max(volHistory.length, 1);
     const latestVol = data.volumes[data.volumes.length - 1] ?? 0;
     const volRatio = latestVol / (avgVol || 1) / fraction;
-    const volConfirmed = volRatio >= cfg.thresholds.momentumVolumeMult;
-    const volNote = volConfirmed
-      ? `volume ${volRatio.toFixed(1)}x average`
-      : "volume below average";
+    const heavy = volRatio >= cfg.thresholds.momentumVolumeMult;
+    // Heavy volume confirms a rise only on a day the price rose. On a down day
+    // it is selling: counting it as confirmation once scored a stock falling
+    // 8% that day as a momentum buy.
+    const prevClose = data.closes[data.closes.length - 2]!;
+    const upToday = data.closes[data.closes.length - 1]! > prevClose;
+    const volConfirmed = heavy && upToday;
+    const volNote = !heavy
+      ? "volume below average"
+      : upToday
+        ? `volume ${volRatio.toFixed(1)}x average`
+        : `volume ${volRatio.toFixed(1)}x average, on a down day`;
 
-    if (cfg.signalTypes.momentum && pct >= cfg.thresholds.momentumPct) {
+    if (cfg.signalTypes.momentum && rise.pct >= cfg.thresholds.momentumPct) {
+      const pct = rise.pct;
       const { confidence, breakdown } = score([
         ["momentum base", 5],
         ["move size", Math.min(2, Math.floor(pct / 5))],
-        [volConfirmed ? "volume confirms" : "volume does not confirm", volConfirmed ? 1 : -1],
+        [
+          volConfirmed ? "volume confirms" : heavy ? "heavy volume on a down day" : "volume does not confirm",
+          volConfirmed ? 1 : -1,
+        ],
         ["news corroboration", newsSymbols.has(symbol) ? 1 : 0],
       ]);
       signals.push({
@@ -70,7 +87,7 @@ export function derivePriceSignals(
         opportunityType: "momentum",
         confidence,
         scoreBreakdown: breakdown,
-        reasoning: `+${pct.toFixed(1)}% over ${tradingDays} trading days (${volNote})`,
+        reasoning: `+${pct.toFixed(1)}% over ${rise.days} trading days (${volNote})`,
         sector: sectorFor(universe, symbol),
         action: "buy",
         timeframe: "immediate",
@@ -80,7 +97,9 @@ export function derivePriceSignals(
       });
     }
 
-    if (cfg.signalTypes.value_play && pct <= cfg.thresholds.valuePullbackPct) {
+    if (cfg.signalTypes.value_play && fall.pct <= cfg.thresholds.valuePullbackPct) {
+      const pct = fall.pct;
+      const tradingDays = fall.days;
       const { confidence, breakdown } = score([
         ["pullback base", 6],
         ["depth of pullback", pct <= -20 ? 2 : 1],
@@ -331,11 +350,15 @@ export function applyPositionContext(
 
   // The stop rule. Note this only fires for symbols that produced a signal;
   // reviewPositions() is what guarantees EVERY position gets checked.
-  const stop = stopFor(signal.symbol, risk).pct;
-  if (plPct <= stop) {
+  const level = positionStop(signal.symbol, position, risk);
+  const price = priceOf(position);
+  if (level && isPastStop(level, price, plPct)) {
     out.action = "sell";
     out.catalysts.push(
-      `Position is ${plPct.toFixed(1)}% — at or past the ${stop}% stop-loss rule`,
+      level.fromHigh
+        ? `Position is ${describeDrop(level, belowAnchorPct(level, price, plPct))} — ` +
+            `at or past its ${level.pct}% stop-loss rule`
+        : `Position is ${plPct.toFixed(1)}% — at or past the ${level.pct}% stop-loss rule`,
     );
   }
   return out;

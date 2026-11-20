@@ -12,12 +12,16 @@ npm run toreda -- scan --json
 
 `portfolio --json` gives each position's `weight` and its `maxWeight` ceiling
 alongside `risk`, so concentration is a direct comparison rather than something
-to recompute.
+to recompute. It also gives each position's `stop`: the `price` where the rule
+is reached, its `pct`, and whether it is measured `from` entry or the high since
+I bought. Use it rather than recomputing from `stopLossPct`, which with sized
+stops is only the fallback. `stop` is null for a core fund, which has none.
 
 For every position, state:
 
-- **Stop** — is it at or past `stopLossPct` from entry? The rule says sell, not
-  reassess. If one is breached, that is the headline of this review.
+- **Stop** — is it at or past its `stop.price`? The rule says sell, not
+  reassess. If one is breached, that is the headline of this review. If
+  `stopProblem` is set, say the stops fell back to the default from entry.
 - **Size** — its weight against its own ceiling. Note anything above 80% of its
   allowance, not only what has breached.
 - **Overrides** — if a symbol has a raised ceiling in `risk.json`, quote the

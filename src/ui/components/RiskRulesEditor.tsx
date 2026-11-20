@@ -2,7 +2,13 @@ import * as React from "react";
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { localDate } from "../../core/journal";
-import { describeRuleChanges, lapsedReason, type RiskRules, stopFor } from "../../core/risk";
+import {
+  describeRuleChanges,
+  lapsedReason,
+  type RiskRules,
+  sizedStopPct,
+  stopFor,
+} from "../../core/risk";
 import { mutedProps } from "../../core/theme";
 import { easternDate } from "../../core/transfers";
 import { reviewPositions } from "../../scanner/review";
@@ -110,14 +116,18 @@ export function RiskRulesEditor({
     setDraft((d) => mutate(structuredClone(d)));
 
   const today = easternDate(new Date());
-  const looser = (value: number): boolean => value < draft.stopLossPct;
+  // A symbol's own stop, against which an exception is looser or tighter: sized
+  // to the stock when sizing is on and its history is known, else the default.
+  const baseStop = (symbol: string): number =>
+    sizedStopPct(book?.positions[symbol]?.stopBasis, draft.stopSizing) ?? draft.stopLossPct;
+  const looser = (symbol: string, value: number): boolean => value < baseStop(symbol);
   const overrideSymbols = Object.keys(draft.overrides).sort();
   const stopSymbols = Object.keys(draft.stopOverrides).sort();
   const rows: Row[] = [
     { kind: "header", label: "Exits" },
     {
       kind: "number",
-      label: "Stop loss (from entry)",
+      label: draft.stopSizing ? "Stop, unsized (from entry)" : "Stop loss (from entry)",
       value: `${draft.stopLossPct}%`,
       was: draft.stopLossPct !== rules.stopLossPct ? `${rules.stopLossPct}%` : null,
       adjust: (dir) =>
@@ -185,7 +195,7 @@ export function RiskRulesEditor({
     const o = draft.stopOverrides[symbol];
     // An end date already past counts as none; a looser stop then gets a fresh one.
     const days = o && ISO_DATE.test(o.until) ? clamp(daysBetween(today, o.until), 0, MAX_DAYS) : 0;
-    return { kind: "stop", symbol, value: o?.stopLossPct ?? draft.stopLossPct, days };
+    return { kind: "stop", symbol, value: o?.stopLossPct ?? baseStop(symbol), days };
   };
 
   useInput(
@@ -256,13 +266,13 @@ export function RiskRulesEditor({
           else if (k.rightArrow) setStage({ ...stage, value: clamp(stage.value + 1, -50, -1) });
           else if (k.return) {
             // A looser stop cannot be open-ended; start it a week out.
-            const days = looser(stage.value) && stage.days < 1 ? DEFAULT_DAYS : stage.days;
+            const days = looser(stage.symbol, stage.value) && stage.days < 1 ? DEFAULT_DAYS : stage.days;
             setStage({ kind: "until", symbol: stage.symbol, value: stage.value, days });
           }
           return;
         }
         case "until": {
-          const min = looser(stage.value) ? 1 : 0;
+          const min = looser(stage.symbol, stage.value) ? 1 : 0;
           if (k.escape) setStage({ kind: "browse" });
           else if (k.leftArrow) setStage({ ...stage, days: clamp(stage.days - 1, min, MAX_DAYS) });
           else if (k.rightArrow) setStage({ ...stage, days: clamp(stage.days + 1, min, MAX_DAYS) });
@@ -411,14 +421,14 @@ export function RiskRulesEditor({
         <Text>
           {stage.symbol} stop: <Text color={t.info}>{stage.value}%</Text>
           <Text {...mutedProps(t)}>
-            {"  "}default {draft.stopLossPct}% · {currentPl(stage.symbol)} · ←/→ adjust · ⏎ next · esc
-            cancel
+            {"  "}its stop {baseStop(stage.symbol)}% · {currentPl(stage.symbol)} · ←/→ adjust · ⏎ next ·
+            esc cancel
           </Text>
         </Text>
         <Text {...mutedProps(t)}>
-          {looser(stage.value)
-            ? "  looser than your default — it will need an end date"
-            : "  at or tighter than your default — an end date is optional"}
+          {looser(stage.symbol, stage.value)
+            ? "  looser than its stop — it will need an end date"
+            : "  at or tighter than its stop — an end date is optional"}
         </Text>
       </Box>
     ) : stage.kind === "until" ? (
@@ -428,8 +438,8 @@ export function RiskRulesEditor({
           <Text {...mutedProps(t)}>{"  "}←/→ adjust · ⏎ next · esc cancel</Text>
         </Text>
         <Text {...mutedProps(t)}>
-          {looser(stage.value)
-            ? `  After that day your ${draft.stopLossPct}% stop applies again, and so does its SELL alert.`
+          {looser(stage.symbol, stage.value)
+            ? `  After that day its ${baseStop(stage.symbol)}% stop applies again, and so does its SELL alert.`
             : "  ← to 0 days for no end date."}
         </Text>
       </Box>
@@ -514,7 +524,7 @@ export function RiskRulesEditor({
               ? "  (changed)"
               : "";
           // Checked against the draft, so a default stop changed in this edit counts.
-          const { lapsed } = stopFor(r.symbol, draft, today);
+          const { lapsed } = stopFor(r.symbol, draft, today, baseStop(r.symbol));
           const ends = ISO_DATE.test(o.until) ? `until ${dayLabel(o.until)}` : "no end date";
           // Only the description shrinks; the cursor, symbol and figures keep their width.
           return (
