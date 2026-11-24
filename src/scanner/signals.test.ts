@@ -158,7 +158,35 @@ test("a one-sided crowd above the sample floor produces a signal", () => {
   const posts = Array.from({ length: 10 }, () => post("Bullish"));
   const signals = deriveSocialSignals(posts, {}, UNIVERSE, CFG);
   assert.equal(signals.length, 1);
-  assert.equal(signals[0]?.action, "buy");
+  // With no price history there is nothing to confirm it.
+  assert.equal(signals[0]?.action, "watch");
+  assert.match(signals[0]!.reasoning, /no price history/);
+});
+
+// The crowd alone is not a reason to buy: without a price check, ten bullish
+// tags could make a `buy` at the confidence threshold with nothing behind them.
+test("a bullish crowd is `watch` while price doesn't confirm it", () => {
+  const posts = Array.from({ length: 10 }, () => post("Bullish"));
+  const [flat] = deriveSocialSignals(posts, { NVDA: rising(0.5) }, UNIVERSE, CFG);
+  assert.equal(flat?.action, "watch");
+  assert.match(flat!.reasoning, /doesn't confirm it/);
+  const [against] = deriveSocialSignals(posts, { NVDA: rising(-10) }, UNIVERSE, CFG);
+  assert.equal(against?.action, "watch", "a crowd leaning against the price");
+});
+
+test("a bullish crowd becomes a `buy` when price agrees", () => {
+  const posts = Array.from({ length: 10 }, () => post("Bullish"));
+  const [signal] = deriveSocialSignals(posts, { NVDA: rising(15) }, UNIVERSE, CFG);
+  assert.equal(signal?.action, "buy");
+  assert.match(signal!.reasoning, /price \+15\.0% agrees/);
+  assert.equal(signal?.pctChange?.toFixed(1), "15.0");
+});
+
+test("price agreeing doesn't change how the crowd is scored", () => {
+  const posts = Array.from({ length: 10 }, () => post("Bullish"));
+  const [alone] = deriveSocialSignals(posts, {}, UNIVERSE, CFG);
+  const [agreed] = deriveSocialSignals(posts, { NVDA: rising(15) }, UNIVERSE, CFG);
+  assert.equal(alone?.confidence, agreed?.confidence);
 });
 
 test("untagged posts are skipped, not guessed at", () => {
@@ -180,6 +208,9 @@ test("a bearish crowd produces `watch`, never `sell`", () => {
   const posts = Array.from({ length: 10 }, () => post("Bearish"));
   const signals = deriveSocialSignals(posts, {}, UNIVERSE, CFG);
   assert.equal(signals[0]?.action, "watch");
+  // Not even when the price is falling with it.
+  const [falling] = deriveSocialSignals(posts, { NVDA: rising(-15) }, UNIVERSE, CFG);
+  assert.equal(falling?.action, "watch");
 });
 
 test("posts about untracked symbols are ignored", () => {

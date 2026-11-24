@@ -27,7 +27,7 @@ export interface ScannerThresholds {
   momentumVolumeMult: number;
   /** Percent drawdown that marks a possible oversold entry. Negative. */
   valuePullbackPct: number;
-  /** Absolute floor for price confirming a news tone. */
+  /** Absolute floor for price confirming a news tone or a social lean. */
   newsPriceAgreePct: number;
   /** Multiples of the symbol's OWN volatility. See the scanner's docs. */
   newsPriceAgreeSigma: number;

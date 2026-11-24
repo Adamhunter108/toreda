@@ -76,10 +76,11 @@ export function ScannerSettings({
     { kind: "number", label: "Volume confirm ≥", value: `${config.thresholds.momentumVolumeMult}x`, onAdjust: num((c) => c.thresholds.momentumVolumeMult, (c, v) => ({ ...c, thresholds: { ...c.thresholds, momentumVolumeMult: v } }), 0.1, 1, 5, 1) },
     { kind: "number", label: "Value pullback ≤", value: `${config.thresholds.valuePullbackPct}%`, onAdjust: num((c) => c.thresholds.valuePullbackPct, (c, v) => ({ ...c, thresholds: { ...c.thresholds, valuePullbackPct: v } }), 1, -40, -1, 0) },
     { kind: "number", label: "Social bull share ≥", value: `${(config.thresholds.socialBullShare * 100).toFixed(0)}%`, onAdjust: num((c) => c.thresholds.socialBullShare, (c, v) => ({ ...c, thresholds: { ...c.thresholds, socialBullShare: v } }), 0.05, 0.5, 0.95, 2) },
-    // How far price must move before it confirms a news tone, in multiples of
-    // the symbol's OWN window volatility. Lower means news directs trades more
-    // often — which is exactly how a quiet fortnight once ratified a headline.
-    { kind: "number", label: "News price confirm ≥", value: `${config.thresholds.newsPriceAgreeSigma.toFixed(2)}σ`, onAdjust: num((c) => c.thresholds.newsPriceAgreeSigma, (c, v) => ({ ...c, thresholds: { ...c.thresholds, newsPriceAgreeSigma: v } }), 0.25, 0.25, 3, 2) },
+    // How far price must move before it confirms a news tone or a social lean,
+    // in multiples of the symbol's OWN window volatility. Lower means headlines
+    // and the crowd direct trades more often — which is exactly how a quiet
+    // fortnight once ratified a headline.
+    { kind: "number", label: "Price confirm ≥", value: `${config.thresholds.newsPriceAgreeSigma.toFixed(2)}σ`, onAdjust: num((c) => c.thresholds.newsPriceAgreeSigma, (c, v) => ({ ...c, thresholds: { ...c.thresholds, newsPriceAgreeSigma: v } }), 0.25, 0.25, 3, 2) },
 
     {
       kind: "header",

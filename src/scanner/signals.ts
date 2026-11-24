@@ -23,6 +23,20 @@ function sectorFor(universe: Universe, symbol: string): string {
   return universe.sectorOf[symbol] ?? "Unclassified";
 }
 
+/**
+ * How far price moved over the window, and how far it had to move to confirm
+ * a tone. News and social share it: neither directs a trade on its own.
+ */
+function priceCheck(bar: SymbolBars | undefined, cfg: ScannerConfig): { pct: number; needed: number } {
+  const pct = bar ? pctChange(bar) : 0;
+  const needed = bar
+    ? confirmationThresholdPct(bar, cfg.thresholds.newsPriceAgreePct, cfg.thresholds.newsPriceAgreeSigma)
+    : cfg.thresholds.newsPriceAgreePct;
+  return { pct, needed };
+}
+
+const signedPct = (pct: number): string => `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+
 // ── Price ───────────────────────────────────────────────────────────────────
 
 /**
@@ -165,14 +179,7 @@ export function deriveNewsSignals(
     if (t.tone === "neutral") continue;
 
     const bar = bars[symbol];
-    const pct = bar ? pctChange(bar) : 0;
-    const needed = bar
-      ? confirmationThresholdPct(
-          bar,
-          cfg.thresholds.newsPriceAgreePct,
-          cfg.thresholds.newsPriceAgreeSigma,
-        )
-      : cfg.thresholds.newsPriceAgreePct;
+    const { pct, needed } = priceCheck(bar, cfg);
     const corroborated =
       (t.tone === "bullish" && pct >= needed) || (t.tone === "bearish" && pct <= -needed);
 
@@ -189,7 +196,7 @@ export function deriveNewsSignals(
       (t.priceReports
         ? ` (${t.priceReports} price-report headline${t.priceReports > 1 ? "s" : ""} excluded)`
         : "");
-    const move = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+    const move = signedPct(pct);
     // Drivers first: these are the headlines the tone was actually scored on.
     const evidence = [...t.drivers, ...headlines.filter((h) => !t.drivers.includes(h))];
 
@@ -216,9 +223,15 @@ export function deriveNewsSignals(
 /**
  * Crowd sentiment, using StockTwits' author-declared Bullish/Bearish tags.
  *
- * Untagged posts are skipped rather than guessed at from keywords. Note that
- * social never produces a `sell`: crowd tags are a crowding indicator, not an
- * edge, and a bearish crowd is at least as often a bottom as a top.
+ * Untagged posts are skipped rather than guessed at from keywords. Crowd tags
+ * are a crowding indicator, not an edge, so like news the crowd never directs a
+ * trade alone: a bullish lean is a `buy` only when price over the same window
+ * agrees, by the same volatility-scaled bar news has to clear. Without that,
+ * ten tagged posts could make a `buy` at the confidence threshold with nothing
+ * else behind them.
+ *
+ * And social never produces a `sell`, even when price agrees: a bearish crowd
+ * is at least as often a bottom as a top.
  */
 export function deriveSocialSignals(
   posts: SocialPost[],
@@ -263,16 +276,29 @@ export function deriveSocialSignals(
       ["one-sided lean", bullShare >= 0.8 || bullShare <= 0.2 ? 1 : 0],
     ]);
 
+    const bar = bars[symbol];
+    const { pct, needed } = priceCheck(bar, cfg);
+    const corroborated = lean === "bullish" && bar !== undefined && pct >= needed;
+    const tally = `${t.bull} bullish / ${t.bear} bearish across ${total} tagged posts (${lean})`;
+    const price =
+      lean === "bearish"
+        ? ""
+        : !bar
+          ? " — no price history to confirm it"
+          : corroborated
+            ? `, price ${signedPct(pct)} agrees (needed ${needed.toFixed(1)}%)`
+            : ` — price ${signedPct(pct)} doesn't confirm it (needed ${needed.toFixed(1)}%)`;
+
     signals.push({
       symbol,
       opportunityType: "social_buzz",
       confidence,
       scoreBreakdown: breakdown,
-      reasoning: `${t.bull} bullish / ${t.bear} bearish across ${total} tagged posts (${lean})`,
+      reasoning: tally + price,
       sector: sectorFor(universe, symbol),
-      action: lean === "bullish" ? "buy" : "watch",
+      action: corroborated ? "buy" : "watch",
       timeframe: "short_term",
-      ...(bars[symbol] ? { price: bars[symbol]!.latest } : {}),
+      ...(bar ? { price: bar.latest, pctChange: pct } : {}),
       catalysts: t.samples,
     });
   }

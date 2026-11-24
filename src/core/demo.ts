@@ -361,11 +361,12 @@ export function demoScanResult(): unknown {
         opportunityType: "social_buzz",
         confidence: 8,
         scoreBreakdown: ["+5 social base", "+2 sample size", "+1 one-sided lean"],
-        reasoning: "21 bullish / 1 bearish across 22 tagged posts (bullish)",
+        reasoning: "21 bullish / 1 bearish across 22 tagged posts (bullish), price +9.4% agrees (needed 6.1%)",
         sector: "Healthcare",
         action: "buy",
         timeframe: "short_term",
         price: 1219.02,
+        pctChange: 9.4,
         catalysts: ["$LLY breaking out of the range here", "$LLY strongest chart in pharma"],
       },
       {

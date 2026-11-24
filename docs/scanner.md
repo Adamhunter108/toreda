@@ -111,9 +111,14 @@ are skipped rather than guessed at.
 
 Needs at least 8 tagged posts, and `socialBullShare` (70%) on one side.
 
-Action: `buy` when bullish, **`watch` when bearish — never `sell`.** Crowd tags
-are a crowding indicator, not an edge, and a bearish crowd is at least as often
-a bottom as a top.
+Action: **`watch` unless price confirms a bullish lean, then `buy`.** It uses
+the same volatility-scaled bar as news (below), and the check changes the
+action, not the score. Crowd tags are a crowding indicator, not an edge:
+without the check, ten bullish tags could make a `buy` at the confidence
+threshold with nothing else behind them.
+
+A bearish crowd is **`watch` — never `sell`**, even when the price is falling
+with it, because a bearish crowd is at least as often a bottom as a top.
 
 ---
 
@@ -121,8 +126,9 @@ a bottom as a top.
 
 The most important threshold in the scanner, and the least obvious.
 
-When news tone points one way, price over the same window has to agree before
-the signal directs a trade. The question is: how far is far enough?
+When news tone or a social lean points one way, price over the same window has
+to agree before the signal directs a trade. The question is: how far is far
+enough?
 
 A flat percentage cannot answer that. `pctChange` measures the **whole window**
 (~11 trading days), so a flat 2% floor asks NVDA — which moves ~3% on a quiet
@@ -141,8 +147,9 @@ window. The configured floor stays on so a very quiet name still has to do
 something. In practice a volatile semiconductor needs a ~7% move to confirm
 where a utility needs 2%.
 
-Raising `newsPriceAgreeSigma` makes news direct trades less often. Lowering it
-does the opposite — and is the single fastest way to make this scanner worse.
+Raising `newsPriceAgreeSigma` makes news and social direct trades less often.
+Lowering it does the opposite — and is the single fastest way to make this
+scanner worse.
 
 ---
 
@@ -291,7 +298,7 @@ only one of them is information.
 | `thresholds.momentumPct` | 5 | Window move that counts as momentum |
 | `thresholds.momentumVolumeMult` | 1.2 | Volume multiple that confirms a move |
 | `thresholds.valuePullbackPct` | −8 | Drawdown that marks a possible entry |
-| `thresholds.newsPriceAgreePct` | 2 | Absolute floor for price confirming tone |
+| `thresholds.newsPriceAgreePct` | 2 | Absolute floor for price confirming news tone or a social lean |
 | `thresholds.newsPriceAgreeSigma` | 1 | Multiples of the symbol's own volatility |
 | `thresholds.socialBullShare` | 0.7 | Share of tagged posts needed for a lean |
 | `discovery.enabled` | true | Run the untracked-movers pass |
