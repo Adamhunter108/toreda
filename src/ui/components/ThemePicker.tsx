@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
-import { mutedProps, THEMES } from "../../core/theme";
+import { mutedProps, THEME_NAME_WIDTH, THEMES } from "../../core/theme";
 import { useTheme, useThemeControls } from "../theme/ThemeContext";
 
 /**
@@ -9,8 +9,8 @@ import { useTheme, useThemeControls } from "../theme/ThemeContext";
  *
  * ↑↓ highlights a theme and applies it LIVE — the choice persists on every move,
  * so `esc` just closes. Each row previews the theme in its own colours, because
- * choosing a palette from four names is guesswork and choosing it from four
- * palettes is just looking.
+ * choosing a palette from a list of names is guesswork and choosing it from the
+ * palettes themselves is just looking.
  */
 const SWATCH = "███";
 
@@ -55,7 +55,7 @@ export function ThemePicker({ onClose }: { onClose: () => void }) {
           <Box key={name}>
             <Text color={sel ? t.accent : undefined} bold={sel}>
               {sel ? "› " : "  "}
-              {name.padEnd(10)}
+              {name.padEnd(THEME_NAME_WIDTH + 2)}
             </Text>
             {ROLES.map((role) => (
               <Text key={role} color={theme[role]}>

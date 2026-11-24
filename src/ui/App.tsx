@@ -24,12 +24,12 @@ import { OrderHistory } from "./components/OrderHistory";
 import { OrderTicket } from "./components/OrderTicket";
 import { Positions } from "./components/Positions";
 import { RiskRulesEditor, type SaveResult } from "./components/RiskRulesEditor";
-import { RulesStrip } from "./components/RulesStrip";
+import { RulesPanel } from "./components/RulesPanel";
 import { ScannerSettings } from "./components/ScannerSettings";
 import { SignalsPanel } from "./components/SignalsPanel";
 import { SignalsView } from "./components/SignalsView";
 import { StatBar } from "./components/StatBar";
-import { StatusBar } from "./components/StatusBar";
+import { StatusBar, statusBarHeight } from "./components/StatusBar";
 import { ThemePicker } from "./components/ThemePicker";
 import { Watchlist } from "./components/Watchlist";
 import { WatchlistManager } from "./components/WatchlistManager";
@@ -39,6 +39,7 @@ import {
   useCloses,
   useEquityHistory,
   useRealized,
+  useStopBases,
   useSnapshots,
   useSymbolStats,
 } from "./hooks/useMarketData";
@@ -53,11 +54,14 @@ import {
   planGrid,
   positionColumns,
   positionsPanelWidth,
-  rulesStripHeight,
+  rulesPanelBoxed,
+  rulesPanelHeight,
+  rulesPanelMaxRows,
   zoomedPanelRows,
   zoomedPositionColumns,
 } from "./layout";
 import { useTheme } from "./theme/ThemeContext";
+import { watchRows } from "./watch-rows";
 import { nextWatchlistSort, sortWatchlist, WATCHLIST_SORT_LABELS } from "./watchlist-sort";
 
 /** Equity chart periods cycled with `p` — [Alpaca period, label, timeframe]. */
@@ -111,12 +115,20 @@ export function App() {
   const { rules: risk, reload: reloadRisk, save: saveRisk } = useRiskRules();
   const tradeMode = useMemo(() => loadConfig().mode, []);
 
+  const stopBases = useStopBases(rawPositions, risk);
+
   // ONE set of numbers for every panel — see ./book.ts for why.
   const book = useMemo(
-    () => markBook(account, rawPositions, prices, risk, flows),
-    [account, rawPositions, prices, risk, flows],
+    () => markBook(account, rawPositions, prices, risk, flows, stopBases?.bases),
+    [account, rawPositions, prices, risk, flows, stopBases],
   );
-  const alerts = useMemo(() => bookAlerts(book, risk), [book, risk]);
+  // With sized stops, a check before their history loads would measure every
+  // stop from entry at the default, and flash alerts that then vanish.
+  const stopsPending = risk.stopSizing !== null && rawPositions.length > 0 && stopBases === null;
+  const alerts = useMemo(
+    () => (stopsPending ? null : bookAlerts(book, risk)),
+    [book, risk, stopsPending],
+  );
   const breaches = useMemo(() => breachesBySymbol(alerts), [alerts]);
   // Past the default stop but held under a dated exception: shown, not alerted.
   const excepted = useMemo(() => bookExceptions(book, risk), [book, risk]);
@@ -151,8 +163,8 @@ export function App() {
   // config/ui.json so "your order" is still there next launch.
   const [wlSort, setWlSort] = useState<WatchlistSort>(() => loadUiConfig().watchlistSort);
   const sortedMovers = useMemo(
-    () => sortWatchlist(movers, wlSort, wl.ordered),
-    [movers, wlSort, wl.ordered],
+    () => sortWatchlist(watchRows(movers, wl.symbols), wlSort, wl.ordered),
+    [movers, wl.symbols, wlSort, wl.ordered],
   );
   const wlSortLabel = WATCHLIST_SORT_LABELS[wlSort];
   const sortedSignals = useMemo(() => {
@@ -340,6 +352,11 @@ export function App() {
       note={note}
     />
   );
+  // Rows the key legend takes beyond its one line, when it wraps under the
+  // status on a narrow terminal. Every panel is sized after it, so the keys
+  // are never pushed off the bottom.
+  const legendExtra = (hint: string): number =>
+    statusBarHeight(status, note, rawPositions.length, updatedAt, hint, cols) - 1;
 
   // Demo output must never be mistakable for a real account — in a screenshot,
   // in a screen share, or in somebody's memory of what they saw.
@@ -363,20 +380,24 @@ export function App() {
   ) : null;
   const bannerLines = (demoBanner ? 1 : 0) + (armedBanner ? 1 : 0);
 
-  const rulesStrip = (
-    <RulesStrip
+  const rulesPanel = (
+    <RulesPanel
       alerts={alerts}
       held={excepted}
       rules={risk}
       positionCount={rawPositions.length}
+      width={cols}
+      maxRows={rulesPanelMaxRows(termRows)}
+      boxed={rulesPanelBoxed(termRows)}
     />
   );
   const cash =
     book.known && book.equity > 0 ? { amount: book.cash, share: book.cash / book.equity } : null;
-  // Banners and the rules strip span the full width above the panels, so they
+  // Banners and the rules panel span the full width above the panels, so they
   // come out of the row budget before any panel is sized.
   const extraLines =
-    bannerLines + rulesStripHeight(alerts === null ? null : alerts.length + excepted.length);
+    bannerLines +
+    rulesPanelHeight(alerts === null ? null : alerts.length + excepted.length, termRows);
 
   // ── Full-screen views ─────────────────────────────────────────────────────
 
@@ -392,7 +413,6 @@ export function App() {
           row={r}
           closes={closes[r.symbol] ?? []}
           stats={symbolStats}
-          stopLossPct={risk.stopLossPct}
           breach={breaches[r.symbol]}
           availCols={cols}
         />
@@ -416,6 +436,7 @@ export function App() {
   }
 
   if (signalsOpen) {
+    const signalsHint = `↑↓ select${armed ? " · o order" : ""} · r rescan · space/esc back`;
     return (
       <Box flexDirection="column">
         {headerBox}
@@ -428,14 +449,14 @@ export function App() {
           lastRun={scan.lastRun}
           minConf={scannerConfig.minConfidence}
           armed={armed}
-          rows={zoomedPanelRows(termRows, bannerLines)}
+          rows={zoomedPanelRows(termRows, bannerLines + legendExtra(signalsHint))}
           cursor={sigSel}
           onCursor={setSigCursor}
           onOrder={openOrder}
           onRefresh={scan.refresh}
           onClose={() => setSignalsOpen(false)}
         />
-        {statusBar(`↑↓ select${armed ? " · o order" : ""} · r rescan · space/esc back`)}
+        {statusBar(signalsHint)}
       </Box>
     );
   }
@@ -522,14 +543,19 @@ export function App() {
   //
   // The focused panel, given the whole terminal. Every key that works on it in
   // the grid still works here — this is the same section, bigger, not a new
-  // screen. The banners and the rules strip stay: zoomed is still the live
+  // screen. The banners and the rules panel stay: zoomed is still the live
   // dashboard, and `o` still reaches the order ticket from it.
 
   if (zoomed) {
-    const zoomRows = zoomedPanelRows(termRows, extraLines);
     const back = "space/esc back · q quit";
+    const hint =
+      focus === "watchlist"
+        ? `↑↓ select · s sort · w reorder${armed ? " · o order" : ""} · ${back}`
+        : focus === "chart"
+          ? `p period · ${back}`
+          : `↑↓ select · ⏎ detail · s sort${armed ? " · o order" : ""} · ${back}`;
+    const zoomRows = zoomedPanelRows(termRows, extraLines + legendExtra(hint));
     let panel: React.ReactNode;
-    let hint: string;
 
     if (focus === "watchlist") {
       panel = (
@@ -542,7 +568,6 @@ export function App() {
           detail={{ sectorOf: wl.sectorOf, held }}
         />
       );
-      hint = `↑↓ select · s sort · w reorder${armed ? " · o order" : ""} · ${back}`;
     } else if (focus === "chart") {
       panel = (
         <EquityChart
@@ -555,7 +580,6 @@ export function App() {
           caveat
         />
       );
-      hint = `p period · ${back}`;
     } else {
       panel = (
         <Positions
@@ -570,7 +594,6 @@ export function App() {
           cash={cash}
         />
       );
-      hint = `↑↓ select · ⏎ detail · s sort${armed ? " · o order" : ""} · ${back}`;
     }
 
     return (
@@ -579,7 +602,7 @@ export function App() {
         {statBar}
         {demoBanner}
         {armedBanner}
-        {rulesStrip}
+        {rulesPanel}
         {panel}
         {statusBar(hint)}
       </Box>
@@ -588,6 +611,21 @@ export function App() {
 
   // ── Main grid ─────────────────────────────────────────────────────────────
 
+  // The focused panel's own keys lead the legend. They used to sit in each
+  // panel's title, which wrapped in the narrow right column and shifted the
+  // layout whenever focus moved. The legend shows every key at every width:
+  // on a narrow terminal it wraps into a grid under the status line.
+  const focusKeys = {
+    positions: "↑↓ select · ⏎ detail · s sort",
+    watchlist: "↑↓ select · s sort",
+    signals: "↑↓ select · [/] line",
+    chart: "p period",
+  }[focus];
+  const mainHint =
+    `${focusKeys} · ${armed ? "o order · " : ""}tab panel · space zoom · l rules · ` +
+    `A ${armed ? "disarm" : "arm"} · h history · g signals · r scan · c settings · ` +
+    `w watchlist · t theme · q quit`;
+
   const columns = positionColumns(positionsPanelWidth(cols));
   // Every panel sized to fit, positions first — see planGrid in ./layout.ts.
   const plan = planGrid({
@@ -595,7 +633,7 @@ export function App() {
     nPos: rows.length,
     nMovers: sortedMovers.length,
     nSignals: scan.result ? sortedSignals.length : 0,
-    contentH: contentRows(termRows, extraLines),
+    contentH: contentRows(termRows, extraLines + legendExtra(mainHint)),
   });
 
   const positionsPanel = (
@@ -624,19 +662,6 @@ export function App() {
     />
   );
 
-  // The focused panel's own keys lead the hint. They used to sit in each
-  // panel's title, which wrapped in the narrow right column and shifted the
-  // layout whenever focus moved; the status bar has room, and it is one line
-  // whatever it says.
-  const focusKeys = {
-    positions: "↑↓ select · ⏎ detail · s sort",
-    watchlist: "↑↓ select · s sort",
-    signals: "↑↓ select · [/] line",
-    chart: "p period",
-  }[focus];
-  const mainHint = wide
-    ? `${focusKeys} · ${armed ? "o order · " : ""}space zoom · l rules · A ${armed ? "disarm" : "arm"} · h history · g signals · c settings · w watchlist · t theme · q quit`
-    : "A o l h g c t · tab space q";
 
   return (
     <Box flexDirection="column">
@@ -644,7 +669,7 @@ export function App() {
       {statBar}
       {demoBanner}
       {armedBanner}
-      {rulesStrip}
+      {rulesPanel}
 
       {wide ? (
         <Box>

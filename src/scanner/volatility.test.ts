@@ -5,6 +5,7 @@ import {
   dailyVolPct,
   pctChange,
   sessionFraction,
+  windowMoves,
 } from "./volatility";
 import type { SymbolBars } from "./types";
 
@@ -28,6 +29,26 @@ test("percent change measures the whole window, first close to last", () => {
 test("a zero or missing first close does not produce Infinity", () => {
   assert.equal(pctChange({ closes: [0, 50], volumes: [1, 1], latest: 50 }), 0);
   assert.equal(pctChange({ closes: [], volumes: [], latest: 0 }), 0);
+});
+
+test("window moves are measured from each of the first three closes to the last", () => {
+  const b: SymbolBars = { closes: [80, 100, 125, 110, 120], volumes: [1, 1, 1, 1, 1], latest: 120 };
+  assert.deepEqual(windowMoves(b), [
+    { pct: 50, days: 5 },
+    { pct: 20, days: 4 },
+    { pct: -4, days: 3 },
+  ]);
+});
+
+test("a short window always leaves at least one day of move", () => {
+  const b: SymbolBars = { closes: [100, 110, 121], volumes: [1, 1, 1], latest: 121 };
+  assert.deepEqual(windowMoves(b).map((m) => m.days), [3, 2]);
+  assert.deepEqual(windowMoves({ closes: [100], volumes: [1], latest: 100 }), []);
+});
+
+test("a zero close is skipped as a start rather than producing Infinity", () => {
+  const b: SymbolBars = { closes: [0, 100, 110], volumes: [1, 1, 1], latest: 110 };
+  assert.deepEqual(windowMoves(b), [{ pct: 10, days: 2 }]);
 });
 
 test("too few bars to estimate volatility returns null", () => {

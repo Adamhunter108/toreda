@@ -121,7 +121,7 @@ export const ZOOM_CHROME_ROWS = 7;
 
 /**
  * Rows the panels may occupy, after the chrome and any full-width lines
- * (banners, the rules strip). The floor keeps a tiny terminal legible.
+ * (banners, the rules panel). The floor keeps a tiny terminal legible.
  */
 export function contentRows(termRows: number, extraLines: number, floor = 16): number {
   return Math.max(floor, termRows - ZOOM_CHROME_ROWS - extraLines);
@@ -239,9 +239,23 @@ export function planGrid(opts: {
   return { posRows, chartRows, watchRows, signalRows };
 }
 
-/** Height the rules strip takes: one line, or one per breach up to a cap. */
-export const STRIP_MAX_ALERTS = 3;
-export function rulesStripHeight(alerts: number | null): number {
-  if (alerts === null || alerts === 0) return 1;
-  return Math.min(alerts, STRIP_MAX_ALERTS) + (alerts > STRIP_MAX_ALERTS ? 1 : 0);
+/** The rules panel's border needs room a short terminal doesn't have. */
+export const RULES_BOXED_MIN_ROWS = 30;
+export function rulesPanelBoxed(termRows: number): boolean {
+  return termRows >= RULES_BOXED_MIN_ROWS;
+}
+
+/** Most rule rows the rules panel shows; the rest are counted in its title. */
+export function rulesPanelMaxRows(termRows: number): number {
+  return termRows >= 40 ? 5 : termRows >= RULES_BOXED_MIN_ROWS ? 4 : 3;
+}
+
+/**
+ * Height the rules panel takes: one line when nothing is breached (or nothing
+ * could be checked), otherwise a title and one row per rule up to a cap, plus
+ * the border when there is room for it.
+ */
+export function rulesPanelHeight(rules: number | null, termRows: number): number {
+  if (rules === null || rules === 0) return 1;
+  return Math.min(rules, rulesPanelMaxRows(termRows)) + 1 + (rulesPanelBoxed(termRows) ? 2 : 0);
 }

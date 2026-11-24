@@ -15,7 +15,8 @@ import {
   positionRowWidth,
   positionsHeight,
   positionsPanelWidth,
-  rulesStripHeight,
+  rulesPanelHeight,
+  rulesPanelMaxRows,
   shouldShowSparkline,
   signalsHeight,
   SPARK_WIDTH,
@@ -235,10 +236,15 @@ test("the narrow grid keeps the full chart when the book fits beside it", () => 
   assert.equal(plan.chartRows, NARROW_CHART_ROWS);
 });
 
-test("the rules strip is one line when quiet, one per breach up to a cap", () => {
-  assert.equal(rulesStripHeight(null), 1);
-  assert.equal(rulesStripHeight(0), 1);
-  assert.equal(rulesStripHeight(2), 2);
-  assert.equal(rulesStripHeight(3), 3);
-  assert.equal(rulesStripHeight(7), 4);
+test("the rules panel is one line when quiet, a boxed row per rule up to a cap", () => {
+  assert.equal(rulesPanelHeight(null, 45), 1);
+  assert.equal(rulesPanelHeight(0, 45), 1);
+  // Border, title, and one row per rule.
+  assert.equal(rulesPanelHeight(2, 45), 5);
+  assert.equal(rulesPanelHeight(5, 45), 8);
+  assert.equal(rulesPanelHeight(7, 45), 8, "past the cap, the title counts the rest");
+  assert.equal(rulesPanelMaxRows(45), 5);
+  assert.equal(rulesPanelMaxRows(32), 4);
+  // A short terminal drops the border and shows fewer rows.
+  assert.equal(rulesPanelHeight(4, 24), 4);
 });

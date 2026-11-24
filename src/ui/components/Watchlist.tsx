@@ -1,13 +1,27 @@
 import * as React from "react";
 import { Box, Text } from "ink";
-import type { Snapshot } from "../../core/market-data";
 import { mutedProps } from "../../core/theme";
 import { humanNum } from "../format";
 import { useTheme } from "../theme/ThemeContext";
+import type { WatchRow } from "../watch-rows";
+
+/**
+ * The move column. With no previous close (a stock's first day) the move is
+ * since today's open, and reads "open -4.1%" so it is never taken for a day's
+ * change.
+ */
+function moveText(m: WatchRow): string {
+  const up = m.changePct >= 0;
+  if (m.sinceOpen) return `open ${up ? "+" : ""}${m.changePct.toFixed(1)}%`;
+  return `${up ? "▲" : "▼"} ${up ? "+" : ""}${m.changePct.toFixed(2)}%`;
+}
 
 /**
  * The watchlist with today's move, in whichever order `sortLabel` names; the
  * caller sorts (see ../watchlist-sort.ts).
+ *
+ * Every watchlist symbol has a row: one the feed returned nothing for says
+ * "no data" (see ../watch-rows.ts) rather than disappearing.
  *
  * When focused via Tab, ↑↓ move a cursor, `s` changes the sort and `o` orders
  * the highlighted name. Zoomed (space), it has the width for `detail`: what you
@@ -21,7 +35,7 @@ export function Watchlist({
   focused = false,
   detail,
 }: {
-  movers: Snapshot[];
+  movers: WatchRow[];
   sortLabel: string;
   rows?: number;
   cursor?: number;
@@ -72,7 +86,8 @@ export function Watchlist({
           {view.map((m, i) => {
             const sel = focused && start + i === cur;
             const up = m.changePct >= 0;
-            const chg = `${up ? "▲" : "▼"} ${up ? "+" : ""}${m.changePct.toFixed(2)}%`;
+            const chg = m.noData ? "no data" : moveText(m);
+            const chgProps = m.noData ? mutedProps(t) : { color: up ? t.positive : t.negative };
             if (!detail) {
               return (
                 <Box key={m.symbol}>
@@ -80,12 +95,14 @@ export function Watchlist({
                     {sel ? "›" : " "}
                     {m.symbol.padEnd(6) /* 6: a five-letter ticker ran into the arrow */}
                   </Text>
-                  <Text color={up ? t.positive : t.negative}>{chg.padEnd(10)}</Text>
-                  <Text {...mutedProps(t)}>{`$${m.price.toFixed(2)}`.padStart(9)}</Text>
+                  <Text {...chgProps}>{chg.padEnd(10)}</Text>
+                  <Text {...mutedProps(t)}>{(m.noData ? "" : `$${m.price.toFixed(2)}`).padStart(9)}</Text>
                 </Box>
               );
             }
             const held = detail.held.has(m.symbol);
+            // No previous session (or no data at all): nothing to show, not $0.00.
+            const noPrev = m.noData || m.sinceOpen;
             return (
               <Box key={m.symbol}>
                 <Text color={sel ? t.accent : undefined} bold={sel}>
@@ -93,11 +110,11 @@ export function Watchlist({
                   {m.symbol.padEnd(6)}
                 </Text>
                 <Text color={t.info}>{held ? "● " : "  "}</Text>
-                <Text color={up ? t.positive : t.negative}>{chg.padEnd(10)}</Text>
-                <Text>{`$${m.price.toFixed(2)}`.padStart(10)}</Text>
-                <Text {...mutedProps(t)}>{`$${m.prevClose.toFixed(2)}`.padStart(10)}</Text>
-                <Text>{humanNum(m.dailyVolume).padStart(9)}</Text>
-                <Text {...mutedProps(t)}>{humanNum(m.prevVolume).padStart(10)}</Text>
+                <Text {...chgProps}>{chg.padEnd(10)}</Text>
+                <Text>{(m.noData ? "" : `$${m.price.toFixed(2)}`).padStart(10)}</Text>
+                <Text {...mutedProps(t)}>{(noPrev ? "—" : `$${m.prevClose.toFixed(2)}`).padStart(10)}</Text>
+                <Text>{(m.noData ? "" : humanNum(m.dailyVolume)).padStart(9)}</Text>
+                <Text {...mutedProps(t)}>{(noPrev ? "—" : humanNum(m.prevVolume)).padStart(10)}</Text>
                 <Text {...mutedProps(t)}>{"  " + (detail.sectorOf[m.symbol] ?? "—").slice(0, 18)}</Text>
               </Box>
             );
@@ -108,7 +125,9 @@ export function Watchlist({
             // IEX — a slice of all trading. Comparing it raw to a full prior
             // session would make every morning look like a volume collapse.
             <Text {...mutedProps(t)} wrap="truncate-end">
-              {" ● you hold it · VOL is today so far, PREV VOL the last full session · IEX feed: a slice of all trading"}
+              {" ● you hold it · " +
+                (view.some((m) => m.sinceOpen) ? "open: since today's open, no previous session · " : "") +
+                "VOL is today so far, PREV VOL the last full session · IEX feed: a slice of all trading"}
             </Text>
           ) : null}
         </>

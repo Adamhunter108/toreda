@@ -135,11 +135,11 @@ export function SignalsView({
 
       {alerts.length > 0 ? (
         <Box flexDirection="column" marginTop={1}>
-          <Text bold color={t.negative}>
+          <Text bold color={alerts.some((a) => a.rule === "STOP LOSS") ? t.negative : t.warning}>
             ⚠ Position alerts
           </Text>
           {alerts.map((a) => (
-            <Text key={a.symbol + a.rule} color={t.negative}>
+            <Text key={a.symbol + a.rule} color={a.rule === "STOP LOSS" ? t.negative : t.warning}>
               {"  "}
               {a.symbol} — {a.rule} {a.action}: {a.detail.split("\n")[0]}
             </Text>

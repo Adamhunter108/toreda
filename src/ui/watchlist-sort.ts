@@ -20,12 +20,16 @@ export const WATCHLIST_SORT_LABELS: Record<WatchlistSort, string> = {
  * - `custom`: the order from config/watchlist.json (`ordered`). A symbol it
  *   does not list (a held position, say) goes last rather than vanishing.
  * - `symbol`: A–Z.
+ *
+ * A row with no data has no move to rank, so `move` puts it last. The other
+ * two sorts keep it in its place: in your order, a gap where you expect a
+ * name is the thing to notice.
  */
-export function sortWatchlist(
-  movers: readonly Snapshot[],
+export function sortWatchlist<T extends Snapshot & { noData?: boolean }>(
+  movers: readonly T[],
   sort: WatchlistSort,
   ordered: readonly string[],
-): Snapshot[] {
+): T[] {
   const rows = [...movers];
   if (sort === "symbol") return rows.sort((a, b) => a.symbol.localeCompare(b.symbol));
   if (sort === "custom") {
@@ -33,7 +37,8 @@ export function sortWatchlist(
     const at = (s: string): number => rank.get(s) ?? Number.MAX_SAFE_INTEGER;
     return rows.sort((a, b) => at(a.symbol) - at(b.symbol) || a.symbol.localeCompare(b.symbol));
   }
-  return rows.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
+  const move = (r: T): number => (r.noData ? -1 : Math.abs(r.changePct));
+  return rows.sort((a, b) => move(b) - move(a));
 }
 
 /** The sort after `current`, for the `s` key. */

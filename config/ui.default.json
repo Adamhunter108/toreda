@@ -1,7 +1,9 @@
 {
   "_comment": [
     "Dashboard preferences. Change the theme from inside the dashboard with",
-    "`t`, which writes this file. Available: Dracula, Nord, Gruvbox, Default.",
+    "`t`, which writes this file. Available: Dracula, Nord, Gruvbox,",
+    "Tokyo Night Storm, Night Owl, Monokai, Catppuccin Mocha, One Dark,",
+    "Solarized Dark, Gotham, Matcha, Greyscale, Default.",
     "Default inherits your terminal's own palette rather than overriding it.",
     "watchlistSort is how the watchlist panel is ordered: move (biggest move",
     "today), custom (your order, set with `w`) or symbol (A-Z). Press `s` with",

@@ -37,7 +37,7 @@ function AllocBar({ weight, ceiling, over, t }: {
   return (
     <Text>
       {"  "}
-      <Text color={over ? t.negative : t.info}>{fill}</Text>
+      <Text color={over ? t.warning : t.info}>{fill}</Text>
       <Text {...mutedProps(t)}>{track}</Text>
     </Text>
   );
@@ -48,9 +48,11 @@ function AllocBar({ weight, ceiling, over, t }: {
  * value, weight and P&L here are the same numbers the rules, the stat bar and
  * the detail pane use.
  *
- * A cell that breaches one of your rules is drawn inverse: P&L% at or past the
- * stop, weight over the ceiling. The rules strip above says which rule, in
- * words; the highlight says where.
+ * A cell that breaches one of your rules is marked: P&L% at or past the stop
+ * is drawn inverse in red, because the rule says sell; a weight over its
+ * ceiling is gold, because the rule says trim when convenient, and a position
+ * that grew too large should not look like one that is failing. The rules
+ * panel above says which rule, in words; the mark says where.
  */
 export function Positions({
   rows,
@@ -150,9 +152,7 @@ export function Positions({
                 <Text color={r.live ? t.positive : t.muted}>{r.live ? "  ●" : "  ○"}</Text>
                 {columns.weight ? (
                   <Text
-                    color={flags?.ceiling ? t.negative : undefined}
-                    inverse={flags?.ceiling}
-                    bold={flags?.ceiling}
+                    color={flags?.ceiling ? t.warning : undefined}
                     {...(flags?.ceiling ? {} : mutedProps(t))}
                   >
                     {padL(wt, WEIGHT_WIDTH)}

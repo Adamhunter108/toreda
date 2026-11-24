@@ -11,7 +11,13 @@ import {
   loadRiskRules,
   maxWeightFor,
   type RiskRules,
+  type StopBasis,
   type StopOverride,
+  belowAnchorPct,
+  isPastStop,
+  parseStopSizing,
+  sizedStopPct,
+  stopLevel,
   stopFor,
 } from "./risk";
 import { configDir, configFile, defaultConfigFile } from "./paths";
@@ -24,6 +30,8 @@ const rules: RiskRules = {
     MSFT: { maxWeight: 0.4, decided: "2026-01-15", reason: "long-term holding" },
   },
   stopOverrides: {},
+  stopSizing: null,
+  coreSymbols: [],
 };
 
 test("an unlisted symbol gets the default ceiling", () => {
@@ -85,6 +93,8 @@ test("rule changes are described in words, one line each", () => {
     trimProfitPct: 25,
     overrides: { SHOP: { maxWeight: 0.35, decided: "2026-01-20", reason: "conviction" } },
     stopOverrides: {},
+    stopSizing: null,
+    coreSymbols: [],
   };
   assert.deepEqual(describeRuleChanges(rules, after), [
     "stop loss −7% → −10%",
@@ -180,4 +190,119 @@ test("a stop loss is expressed as a negative percent", () => {
   // Guards against a future edit flipping the sign, which would make every
   // position look like it had breached the stop.
   assert.ok(DEFAULT_RISK_RULES.stopLossPct < 0);
+});
+
+// ── Stops sized to the stock, measured from the high ────────────────────────
+// Figures are made up. The point of each test is the rule, not the numbers.
+
+const SIZING = { volMultiple: 2, narrowestPct: -8, widestPct: -30, trailing: true };
+const SIZED: RiskRules = { ...DEFAULT_RISK_RULES, stopLossPct: -10, stopSizing: SIZING };
+
+const basis = (twoWeekMovePct: number | null, high: number | null = null): StopBasis => ({
+  since: "2026-03-02",
+  twoWeekMovePct,
+  high,
+  highDate: high === null ? null : "2026-06-01",
+  note: twoWeekMovePct === null ? "too little history" : null,
+});
+
+test("a sized stop is twice the stock's two-week move", () => {
+  assert.equal(sizedStopPct(basis(6), SIZING), -12);
+});
+
+test("a sized stop is never tighter than the narrowest or wider than the widest", () => {
+  assert.equal(sizedStopPct(basis(2), SIZING), -8);
+  assert.equal(sizedStopPct(basis(20), SIZING), -30);
+});
+
+test("with no history, or sizing off, there is no sized stop", () => {
+  assert.equal(sizedStopPct(basis(null), SIZING), null);
+  assert.equal(sizedStopPct(undefined, SIZING), null);
+  assert.equal(sizedStopPct(basis(6), null), null);
+  assert.equal(sizedStopPct(basis(6), { ...SIZING, volMultiple: 0 }), null);
+});
+
+// The reason for measuring from the high: from entry, a position up 80% has
+// its stop half the price away, and nothing watches it give the gain back.
+test("a winner's stop follows it up from the highest close", () => {
+  const level = stopLevel("AAA", 100, basis(10, 200), SIZED)!;
+  assert.equal(level.pct, -20);
+  assert.equal(level.fromHigh, true);
+  assert.equal(level.anchor, 200);
+  assert.ok(Math.abs(level.price - 160) < 1e-9);
+});
+
+test("a high below entry leaves the stop measured from entry", () => {
+  const level = stopLevel("AAA", 100, basis(10, 95), SIZED)!;
+  assert.equal(level.fromHigh, false);
+  assert.ok(Math.abs(level.price - 80) < 1e-9);
+});
+
+test("with trailing off, the sized stop is measured from entry", () => {
+  const rules = { ...SIZED, stopSizing: { ...SIZING, trailing: false } };
+  const level = stopLevel("AAA", 100, basis(10, 200), rules)!;
+  assert.equal(level.fromHigh, false);
+  assert.ok(Math.abs(level.price - 80) < 1e-9);
+});
+
+test("a stock with too little history falls back to the default, and says why", () => {
+  const level = stopLevel("AAA", 100, basis(null, 120), SIZED)!;
+  assert.equal(level.sized, false);
+  assert.equal(level.pct, -10);
+  assert.equal(level.note, "too little history");
+  // It still follows the high: only the width falls back.
+  assert.ok(Math.abs(level.price - 108) < 1e-9);
+});
+
+test("without sizing, the stop is the old one: the default, from entry", () => {
+  const rules = { ...DEFAULT_RISK_RULES, stopLossPct: -7 };
+  const level = stopLevel("AAA", 100, basis(10, 200), rules)!;
+  assert.equal(level.pct, -7);
+  assert.equal(level.fromHigh, false);
+  assert.equal(level.note, null);
+});
+
+test("a core fund has no stop", () => {
+  const rules = { ...SIZED, coreSymbols: ["IDXF"] };
+  assert.equal(stopLevel("IDXF", 100, basis(3, 120), rules), null);
+  assert.equal(stopLevel("idxf", 100, undefined, { ...DEFAULT_RISK_RULES, coreSymbols: ["IDXF"] }), null);
+});
+
+// An exception is looser or tighter than the stop it replaces: the stock's own.
+test("an exception is judged against the stock's sized stop, not the default", () => {
+  const today = "2026-06-10";
+  const tighter: StopOverride = { stopLossPct: -15, decided: "2026-06-01", until: "", reason: "r" };
+  const rules = { ...SIZED, stopOverrides: { AAA: tighter } };
+  // −15% is looser than the −10% default but tighter than the −20% sized stop.
+  const level = stopLevel("AAA", 100, basis(10, 200), rules, today)!;
+  assert.equal(level.pct, -15);
+  assert.ok(level.exception);
+
+  const looser: StopOverride = { ...tighter, stopLossPct: -25 };
+  const open = stopLevel("AAA", 100, basis(10, 200), { ...SIZED, stopOverrides: { AAA: looser } }, today)!;
+  assert.equal(open.pct, -20, "a looser stop with no end date does not apply");
+  assert.ok(open.lapsed);
+});
+
+test("the stop is reached at exactly its price, from the high", () => {
+  const level = stopLevel("AAA", 100, basis(10, 200), SIZED)!;
+  assert.equal(isPastStop(level, 160, 60), true);
+  assert.equal(isPastStop(level, 160.01, 60), false);
+  assert.ok(Math.abs(belowAnchorPct(level, 150, 50) - -25) < 1e-9);
+});
+
+test("a malformed sizing block is ignored rather than half-read", () => {
+  assert.deepEqual(parseStopSizing(SIZING), SIZING);
+  assert.equal(parseStopSizing({ ...SIZING, trailing: undefined })?.trailing, true);
+  assert.equal(parseStopSizing({ ...SIZING, narrowestPct: 8 }), null);
+  assert.equal(parseStopSizing({ ...SIZING, widestPct: -5 }), null);
+  assert.equal(parseStopSizing({ volMultiple: 2 }), null);
+  assert.equal(parseStopSizing(null), null);
+});
+
+test("turning sizing on and naming core funds are described as rule changes", () => {
+  const after = { ...DEFAULT_RISK_RULES, stopSizing: SIZING, coreSymbols: ["IDXF", "DIVF"] };
+  const lines = describeRuleChanges(DEFAULT_RISK_RULES, after);
+  assert.ok(lines.includes("stops: one stop from entry → 2× the stock's two-week move, −8% to −30%, from the high"));
+  assert.ok(lines.includes("core funds (no stop): none → IDXF, DIVF"));
 });

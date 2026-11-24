@@ -16,8 +16,9 @@ import {
   hasOverride,
   maxWeightFor,
   type RiskRules,
-  type StopOverride,
-  stopFor,
+  type StopBasis,
+  type StopLevel,
+  stopLevel,
 } from "../core/risk";
 import { type CashFlows, dayChange } from "../core/transfers";
 import type { Account, Position } from "../core/types";
@@ -53,12 +54,13 @@ export interface BookRow {
   ceiling: number;
   /** True when the ceiling is a dated override rather than the default. */
   override: boolean;
-  /** The price at which the stop-loss rule is reached. */
-  stopPrice: number;
-  /** This symbol's stop today: the default, or a dated exception's. */
-  stopPct: number;
-  /** The exception in force, if any. */
-  stopException: StopOverride | null;
+  /**
+   * This symbol's stop today: where it is, what it is measured from, and any
+   * exception in force. Null for a core fund, which has no stop.
+   */
+  stop: StopLevel | null;
+  /** What the stop is measured from, when stops are sized. */
+  stopBasis: StopBasis | undefined;
 }
 
 export interface Book {
@@ -99,6 +101,8 @@ export function markBook(
   risk: RiskRules,
   /** Deposits and withdrawals since the previous close; null if unchecked. */
   transfers: CashFlows | null,
+  /** What each stop is measured from, when stops are sized (see scanner/stops.ts). */
+  stopBases: Record<string, StopBasis> = {},
 ): Book {
   // Re-mark the polled equity to live prices: the account figure already
   // includes each position at its polled price, so add the difference.
@@ -117,7 +121,7 @@ export function markBook(
     const value = p.qty * price;
     const pl = value - p.costBasis;
     const day = positionDay(p, price);
-    const stop = stopFor(p.symbol, risk);
+    const stopBasis = stopBases[p.symbol];
     return {
       symbol: p.symbol,
       qty: p.qty,
@@ -134,9 +138,8 @@ export function markBook(
       weight: known && equity > 0 ? value / equity : null,
       ceiling: maxWeightFor(p.symbol, risk),
       override: hasOverride(p.symbol, risk),
-      stopPrice: p.avgEntry * (1 + stop.pct / 100),
-      stopPct: stop.pct,
-      stopException: stop.exception,
+      stop: stopLevel(p.symbol, p.avgEntry, stopBasis, risk),
+      stopBasis,
     };
   });
 
@@ -171,6 +174,9 @@ export function bookAccountState(book: Book): AccountState | null {
       unrealizedPl: r.pl,
       unrealizedPlPct: r.plPct / 100,
       weight: r.weight ?? 0,
+      price: r.price,
+      avgEntry: r.avgEntry,
+      ...(r.stopBasis ? { stopBasis: r.stopBasis } : {}),
     };
   }
   return state;

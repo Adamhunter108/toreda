@@ -1,52 +1,70 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fitHint } from "./StatusBar";
+import { layoutFooter, parseHints, statusBarHeight } from "./StatusBar";
 
-const HINT = "o order · A disarm · h history · g signals · c settings · w watchlist · t theme · q quit";
+const HINT =
+  "↑↓ select · ⏎ detail · s sort · tab panel · space zoom · l rules · A arm · h history · " +
+  "g signals · r scan · c settings · w watchlist · t theme · q quit";
 
-test("a hint that fits is returned unchanged", () => {
-  assert.equal(fitHint(HINT, HINT.length), HINT);
-  assert.equal(fitHint(HINT, 500), HINT);
+test("each segment splits into its key and what it does", () => {
+  assert.deepEqual(parseHints("↑↓ select · space/esc back · [/] line · A arm"), [
+    { key: "↑↓", label: "select" },
+    { key: "space/esc", label: "back" },
+    { key: "[/]", label: "line" },
+    { key: "A", label: "arm" },
+  ]);
 });
 
-// Ink clips an overflowing row mid-character, which fused two independent
-// readings into "stream ●connectin1 pos". Dropping whole segments keeps every
-// surviving token readable.
-test("an overlong hint drops trailing segments rather than mid-word", () => {
-  const out = fitHint(HINT, 40);
-  assert.ok(out.length <= 40, `got ${out.length} chars: ${out}`);
-  assert.ok(out.endsWith("…"), "truncation should be marked");
-  // Whatever survives must be whole segments, never a severed word.
-  for (const seg of out.replace(" …", "").split(" · ")) {
-    assert.ok(HINT.includes(seg), `"${seg}" is not a whole segment of the hint`);
+test("a segment that isn't a key stays a plain label", () => {
+  assert.deepEqual(parseHints("scanner settings · esc back"), [
+    { key: "", label: "scanner settings" },
+    { key: "esc", label: "back" },
+  ]);
+  assert.deepEqual(parseHints("editing watchlist"), [{ key: "", label: "editing watchlist" }]);
+});
+
+test("when everything fits, status and keys share one line", () => {
+  const layout = layoutFooter(40, parseHints("esc back · q quit"), 120);
+  assert.equal(layout.inline, true);
+  assert.equal(layout.rows.length, 1);
+});
+
+// A vertical screen is narrow: the legend used to lose most of its keys off
+// the right. Now every key is shown, in as many rows as it takes.
+test("on a narrow terminal every key wraps into a grid, none dropped", () => {
+  const hints = parseHints(HINT);
+  const layout = layoutFooter(40, hints, 80);
+  assert.equal(layout.inline, false);
+  assert.deepEqual(layout.rows.flat(), hints, "every key, in order");
+  // The widest entry ("w watchlist", "c settings") sets the cell.
+  assert.equal(layout.cell, "w watchlist".length + 2);
+  for (const row of layout.rows) {
+    const width = (row.length - 1) * layout.cell + (row.at(-1)!.key.length + 1 + row.at(-1)!.label.length);
+    assert.ok(width <= 78, `row is ${width} wide`);
   }
 });
 
-test("the most important segment is kept, the least important dropped first", () => {
-  // Segments are ordered most- to least-important, so the head survives.
-  const out = fitHint(HINT, 30);
-  assert.ok(out.startsWith("o order"), out);
-  assert.ok(!out.includes("q quit"), out);
+test("wrapped rows are evened out rather than leaving a short last row", () => {
+  const rows = layoutFooter(40, parseHints(HINT), 150).rows.map((r) => r.length);
+  assert.deepEqual(rows, [7, 7]);
 });
 
-test("progressively less room yields progressively shorter hints", () => {
-  const wide = fitHint(HINT, 80);
-  const narrow = fitHint(HINT, 40);
-  const tiny = fitHint(HINT, 20);
-  assert.ok(wide.length >= narrow.length);
-  assert.ok(narrow.length >= tiny.length);
+test("a narrower terminal takes more rows, never a cut key", () => {
+  const hints = parseHints(HINT);
+  const wide = layoutFooter(40, hints, 100).rows.length;
+  const narrow = layoutFooter(40, hints, 60).rows.length;
+  assert.ok(narrow > wide);
+  assert.equal(layoutFooter(40, hints, 10).rows.length, hints.length, "one per row at worst");
 });
 
-test("a single segment too long for the space is hard-truncated", () => {
-  const out = fitHint("averylongsinglesegmentwithnobreaks", 10);
-  assert.equal(out.length, 10);
+test("the height counts the status line plus the legend's rows", () => {
+  const at = new Date(2026, 2, 2, 9, 30);
+  assert.equal(statusBarHeight("live", undefined, 3, at, "esc back · q quit", 120), 1);
+  const rows = layoutFooter(0, parseHints(HINT), 80).rows.length;
+  const height = statusBarHeight("live", undefined, 3, at, HINT, 80);
+  assert.ok(height >= 2 && height <= rows + 1, `height ${height}`);
 });
 
-test("no room at all yields nothing rather than a stray ellipsis", () => {
-  assert.equal(fitHint(HINT, 0), "");
-  assert.equal(fitHint(HINT, -5), "");
-});
-
-test("an empty hint stays empty", () => {
-  assert.equal(fitHint("", 40), "");
+test("no keys at all is just the status line", () => {
+  assert.equal(statusBarHeight("live", undefined, 0, null, "", 80), 1);
 });

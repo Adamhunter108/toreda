@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Box, Text } from "ink";
 import type { SymbolStats } from "../../core/market-data";
+import { isPastStop } from "../../core/risk";
 import { mutedProps, plColor } from "../../core/theme";
 import type { BookRow } from "../book";
 import { brailleChart } from "../charts";
@@ -16,19 +17,17 @@ export function DetailPane({
   row: r,
   closes,
   stats,
-  stopLossPct,
   breach,
   availCols,
 }: {
   row: BookRow;
   closes: number[];
   stats: SymbolStats | null;
-  /** The DEFAULT stop; the row carries this symbol's own (`r.stopPct`). */
-  stopLossPct: number;
   breach: { stop: boolean; ceiling: boolean } | undefined;
   availCols: number;
 }) {
   const t = useTheme();
+  const { stop } = r;
   const plCol = plColor(t, r.pl);
   const width = Math.max(24, Math.min(availCols - 12, 72));
   const chart = closes.length >= 2 ? brailleChart(closes, width, 5) : [];
@@ -82,7 +81,7 @@ export function DetailPane({
       <Box marginTop={1} flexDirection="column">
         <Text {...mutedProps(t)}>your rules</Text>
         <Row label="Weight">
-          <Text color={breach?.ceiling ? t.negative : undefined} bold={breach?.ceiling}>
+          <Text color={breach?.ceiling ? t.warning : undefined}>
             {r.weight === null ? "—" : `${pct(r.weight)} of portfolio`}
           </Text>
           <Text {...mutedProps(t)}>
@@ -90,27 +89,37 @@ export function DetailPane({
           </Text>
         </Row>
         <Row label="Stop">
-          <Text color={breach?.stop ? t.negative : undefined} bold={breach?.stop}>
-            {usd(r.stopPrice)}/sh
-          </Text>
-          <Text {...mutedProps(t)}>
-            {` · ${r.stopPct}% from entry`}
-            {r.stopException
-              ? ` (exception${r.stopException.until ? ` until ${r.stopException.until}` : ""})`
-              : ""}
-          </Text>
-          {breach?.stop ? (
-            <Text color={t.negative} bold>
-              {"  at or past it — the rule says sell"}
-            </Text>
-          ) : r.stopException && r.plPct <= stopLossPct ? (
-            <Text color={t.warning}>{`  past your ${stopLossPct}% default — held by the exception`}</Text>
-          ) : null}
+          {stop === null ? (
+            <Text {...mutedProps(t)}>none — a core fund, held through corrections</Text>
+          ) : (
+            <>
+              <Text color={breach?.stop ? t.negative : undefined} bold={breach?.stop}>
+                {usd(stop.price)}/sh
+              </Text>
+              <Text {...mutedProps(t)}>
+                {` · ${stop.pct}% from ${stop.fromHigh ? `its ${usd(stop.anchor)} high` : "entry"}`}
+                {stop.exception
+                  ? ` (exception${stop.exception.until ? ` until ${stop.exception.until}` : ""})`
+                  : stop.sized
+                    ? " (sized to the stock)"
+                    : stop.note
+                      ? ` (default: ${stop.note})`
+                      : ""}
+              </Text>
+              {breach?.stop ? (
+                <Text color={t.negative} bold>
+                  {"  at or past it — the rule says sell"}
+                </Text>
+              ) : stop.exception && isPastStop(stop, r.price, r.plPct, "base") ? (
+                <Text color={t.warning}>{`  past its ${stop.basePct}% stop — held by the exception`}</Text>
+              ) : null}
+            </>
+          )}
         </Row>
-        {r.stopException ? (
+        {stop?.exception ? (
           <Row label="Why">
             <Text {...mutedProps(t)} wrap="truncate-end">
-              {`decided ${r.stopException.decided || "undated"} · ${r.stopException.reason || "no reason recorded"}`}
+              {`decided ${stop.exception.decided || "undated"} · ${stop.exception.reason || "no reason recorded"}`}
             </Text>
           </Row>
         ) : null}
@@ -124,7 +133,8 @@ export function DetailPane({
               <Text>{`${usd(stats.open)}  ${usd(stats.high)}  ${usd(stats.low)}`}</Text>
             </Row>
             <Row label="Prev close">
-              <Text>{usd(stats.prevClose)}</Text>
+              {/* 0 means there was no previous session, as on a first day. */}
+              <Text>{stats.prevClose ? usd(stats.prevClose) : "— (no previous session)"}</Text>
             </Row>
             <Row label="Volume">
               <Text>{humanNum(stats.volume)}</Text>

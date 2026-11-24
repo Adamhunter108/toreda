@@ -31,6 +31,8 @@ const RULES: RiskRules = {
     SHOP: { maxWeight: 0.3, decided: "2026-01-15", reason: "building a position" },
   },
   stopOverrides: {},
+  stopSizing: null,
+  coreSymbols: [],
 };
 
 function review(positions: Record<string, PositionInfo>) {
@@ -190,4 +192,90 @@ test("an empty portfolio produces no alerts", () => {
 
 test("a healthy portfolio produces no alerts", () => {
   assert.equal(review({ AMD: position(0.1, 5), NET: position(0.15, -2) }).length, 0);
+});
+
+// ── Stops sized to the stock and measured from its high ─────────────────────
+
+const SIZED: RiskRules = {
+  ...RULES,
+  stopLossPct: -10,
+  stopSizing: { volMultiple: 2, narrowestPct: -8, widestPct: -30, trailing: true },
+  coreSymbols: ["IDX"],
+};
+
+/** A position bought at $100 that peaked at `high` and now trades at `price`. */
+function trailed(price: number, high: number, twoWeekMovePct: number | null = 10): PositionInfo {
+  const marketValue = price;
+  return {
+    qty: 1,
+    marketValue,
+    unrealizedPl: price - 100,
+    unrealizedPlPct: (price - 100) / 100,
+    weight: marketValue / PORTFOLIO,
+    price,
+    avgEntry: 100,
+    stopBasis: { since: "2026-01-05", twoWeekMovePct, high, highDate: "2026-01-20", note: null },
+  };
+}
+
+// The gap this closes: up 55% from entry, a stop measured from entry is half
+// the price away, and nothing says a word while the winner gives back 22%.
+test("a winner that falls its sized stop from its high trips it, though still up from entry", () => {
+  const alert = reviewWith(SIZED, { WIN: trailed(155, 200) })[0];
+  assert.equal(alert?.rule, "STOP LOSS");
+  assert.match(alert!.detail, /-22\.5% from its \$200\.00 high \(2026-01-20\) — at or past its -20% stop \(\$160\.00\)/);
+  assert.equal(reviewWith(RULES, { WIN: trailed(155, 200) }).length, 0, "the stop from entry stays silent");
+});
+
+test("a winner above its sized stop is quiet", () => {
+  assert.equal(reviewWith(SIZED, { WIN: trailed(165, 200) }).length, 0);
+});
+
+test("a core fund is never told to sell, however far it falls", () => {
+  assert.equal(reviewWith(SIZED, { IDX: trailed(60, 120) }).length, 0);
+});
+
+test("a stock too new to size uses the default stop, from entry", () => {
+  assert.ok(reviewWith(SIZED, { NEW: trailed(89, 95, null) }).some((a) => a.rule === "STOP LOSS"));
+  assert.equal(reviewWith(SIZED, { NEW: trailed(91, 95, null) }).length, 0);
+});
+
+test("an exception holds a sized stop open and is listed against it", () => {
+  const rules: RiskRules = {
+    ...SIZED,
+    stopOverrides: {
+      WIN: { stopLossPct: -30, decided: "2026-02-02", until: "2026-02-06", reason: "through earnings" },
+    },
+  };
+  const book = { WIN: trailed(155, 200) };
+  assert.equal(reviewWith(rules, book).length, 0);
+  const held = heldWith(rules, book);
+  assert.equal(held.length, 1);
+  assert.equal(held[0]!.defaultPct, -20, "past its own sized stop, not the default");
+  assert.equal(held[0]!.from, "high");
+  assert.ok(Math.abs(held[0]!.belowPct - -22.5) < 1e-9);
+});
+
+// ── The figures behind each alert, for the dashboard's short rows ───────────
+
+test("a stop alert carries its figures, not only a sentence", () => {
+  const [alert] = review({ XYZ: { ...position(0.1, -9), avgEntry: 50, price: 45.5 } });
+  assert.equal(alert?.rule, "STOP LOSS");
+  assert.deepEqual(alert?.stop, {
+    belowPct: -9,
+    from: "entry",
+    anchor: 50,
+    highDate: null,
+    pct: -7,
+    price: 46.5,
+    exceptionUntil: null,
+    lapsedUntil: null,
+  });
+});
+
+test("a concentration alert carries its weight, ceiling and dollars over", () => {
+  const alert = review({ XYZ: position(0.3, 5) }).find((a) => a.rule === "CONCENTRATION");
+  assert.deepEqual(alert?.size, { weight: 0.3, ceiling: 0.25, overUsd: 50, override: false });
+  const raised = review({ SHOP: position(0.35, 5) }).find((a) => a.rule === "CONCENTRATION");
+  assert.equal(raised?.size?.override, true);
 });

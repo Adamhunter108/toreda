@@ -14,7 +14,7 @@ import { getQuotes } from "../../core/market-data";
 import { saveJsonConfig } from "../../core/json-config";
 import { ensureDataDirs, envFile, REPO_ROOT } from "../../core/paths";
 import { DEFAULT_RISK_RULES, type RiskRules } from "../../core/risk";
-import { THEME_ORDER, THEMES } from "../../core/theme";
+import { THEME_NAME_WIDTH, THEME_ORDER, THEMES } from "../../core/theme";
 import type { ParsedArgs } from "../args";
 import { c, out, themed } from "../format";
 import {
@@ -287,6 +287,8 @@ async function stepRisk(): Promise<RiskRules> {
     trimProfitPct,
     overrides: {},
     stopOverrides: {},
+    stopSizing: DEFAULT_RISK_RULES.stopSizing,
+    coreSymbols: DEFAULT_RISK_RULES.coreSymbols,
   };
 }
 
@@ -301,13 +303,13 @@ async function stepTheme(): Promise<string> {
     THEME_ORDER.map((name) => {
       const theme = THEMES[name]!;
       // Render the theme's OWN colours rather than describing them. Picking a
-      // palette from four names is guesswork; picking it from four palettes is
-      // just looking.
+      // palette from a list of names is guesswork; picking it from the palettes
+      // is just looking.
       const swatch =
         `${themed(theme.positive, "● gain")} ${themed(theme.negative, "● loss")} ` +
         `${themed(theme.warning, "● warn")} ${themed(theme.accent, "● accent")}`;
       return {
-        label: name.padEnd(10),
+        label: name.padEnd(THEME_NAME_WIDTH + 1),
         value: name,
         hint:
           name === "Default" ? `${swatch}  ${c.dim("(your terminal's own)")}` : swatch,

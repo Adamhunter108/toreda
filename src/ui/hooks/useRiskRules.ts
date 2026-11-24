@@ -2,7 +2,7 @@
 //
 // The dashboard is not the only thing that edits this file: you might, by
 // hand, and Claude does when asked to change a rule (see CLAUDE.md). Reading it
-// once at startup would leave the rules strip checking yesterday's stop while
+// once at startup would leave the rules panel checking yesterday's stop while
 // the file says something else — so the file's mtime is polled, and the rules
 // reload when it changes. A stat every few seconds is effectively free.
 import { statSync } from "node:fs";

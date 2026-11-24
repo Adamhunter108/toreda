@@ -15,6 +15,8 @@ const RULES: RiskRules = {
   trimProfitPct: 25,
   overrides: {},
   stopOverrides: {},
+  stopSizing: null,
+  coreSymbols: [],
 };
 
 /** Bars rising steadily by `totalPct` across `days`, with flat volume. */
@@ -75,6 +77,48 @@ test("volume confirmation raises confidence, and its absence lowers it", () => {
   assert.ok(confirmed.confidence > unconfirmed.confidence);
   assert.match(confirmed.reasoning, /volume .*x average/);
   assert.match(unconfirmed.reasoning, /volume below average/);
+});
+
+// Heavy volume on a down day is selling. It once confirmed a "momentum buy" on
+// a stock falling 8% that day.
+test("heavy volume on a down day does not confirm a rise", () => {
+  const bars = rising(15, 10, 3);
+  bars.closes[bars.closes.length - 1] = bars.closes[bars.closes.length - 2]! * 0.97;
+  const momentum = derivePriceSignals({ NVDA: bars }, [], UNIVERSE, CFG, AFTER_CLOSE).find(
+    (s) => s.opportunityType === "momentum",
+  );
+  assert.ok(momentum, "still a rise over the window");
+  assert.ok(momentum.scoreBreakdown.includes("-1 heavy volume on a down day"), momentum.scoreBreakdown.join(", "));
+  assert.match(momentum.reasoning, /3\.0x average, on a down day/);
+});
+
+// The window opens wherever the calendar puts it. Opening on a one-day crash
+// made a rebound from that single day read as a trend.
+test("a window that opens on a one-day crash does not read the rebound as momentum", () => {
+  const crash: SymbolBars = {
+    closes: [80, 96, 100, 99, 101, 100, 102, 101, 100, 101],
+    volumes: Array(10).fill(1_000_000),
+    latest: 101,
+  };
+  const signals = derivePriceSignals({ NVDA: crash }, [], UNIVERSE, CFG, AFTER_CLOSE);
+  assert.equal(signals.filter((s) => s.opportunityType === "momentum").length, 0);
+});
+
+test("a window that opens on a one-day spike does not read the drop back as a pullback", () => {
+  const spike: SymbolBars = {
+    closes: [120, 100, 99, 100, 98, 99, 100, 99, 98, 99],
+    volumes: Array(10).fill(1_000_000),
+    latest: 99,
+  };
+  const signals = derivePriceSignals({ NVDA: spike }, [], UNIVERSE, CFG, AFTER_CLOSE);
+  assert.equal(signals.filter((s) => s.opportunityType === "value_play").length, 0);
+});
+
+test("momentum reports the most conservative reading of the window", () => {
+  const momentum = derivePriceSignals({ NVDA: rising(10) }, [], UNIVERSE, CFG, AFTER_CLOSE)[0];
+  assert.ok(momentum);
+  // From the third close (about 102.2) to 110, over 8 closes, not +10% over 10.
+  assert.match(momentum.reasoning, /^\+7\.6% over 8 trading days/);
 });
 
 // A falling knife and a bargain look identical until afterwards, so a pullback
@@ -223,4 +267,20 @@ test("held positions carry their size and P&L into the catalysts", () => {
   const out = applyPositionContext(buySignal, account(held(0.15, 12)), RULES);
   assert.match(out.catalysts.join(" "), /Held: 10 sh/);
   assert.match(out.catalysts.join(" "), /15% of portfolio/);
+});
+
+test("a buy on a winner past its sized stop from the high becomes a sell", () => {
+  const rules: RiskRules = {
+    ...RULES,
+    stopSizing: { volMultiple: 2, narrowestPct: -8, widestPct: -30, trailing: true },
+  };
+  const winner: PositionInfo = {
+    ...held(0.1, 55),
+    price: 155,
+    avgEntry: 100,
+    stopBasis: { since: "2026-01-05", twoWeekMovePct: 10, high: 200, highDate: "2026-01-20", note: null },
+  };
+  const out = applyPositionContext(buySignal, account(winner), rules);
+  assert.equal(out.action, "sell");
+  assert.match(out.catalysts.join(" "), /from its \$200\.00 high .* -20% stop-loss rule/);
 });

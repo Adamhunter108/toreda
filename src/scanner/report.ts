@@ -49,7 +49,10 @@ export function printStopExceptions(held: StopException[]): void {
   for (const h of held) {
     out(
       "",
-      `${c.bold(h.symbol)} — ${c.yellow(`${h.plPct.toFixed(1)}% from entry, past the ${h.defaultPct}% stop`)}`,
+      `${c.bold(h.symbol)} — ${c.yellow(
+        `${h.belowPct.toFixed(1)}% from ${h.from === "high" ? "its high" : "entry"}, ` +
+          `past the ${h.defaultPct}% stop`,
+      )}`,
       `  Exception to ${h.stopPct}%${h.until ? ` until ${h.until}` : ""} ` +
         `(decided ${h.decided || "undated"}): ${h.reason}`,
     );

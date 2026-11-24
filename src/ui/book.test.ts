@@ -11,6 +11,8 @@ const rules: RiskRules = {
   trimProfitPct: 25,
   overrides: { CCC: { maxWeight: 0.5, decided: "2026-01-02", reason: "core holding" } },
   stopOverrides: {},
+  stopSizing: null,
+  coreSymbols: [],
 };
 
 function position(symbol: string, qty: number, avgEntry: number, price: number): Position {
@@ -146,10 +148,29 @@ test("a live price can trip the stop before the next account poll", () => {
 
 test("the stop price is the entry less the stop percentage", () => {
   const bbb = markBook(account, positions, {}, rules, NO_FLOWS).rows.find((r) => r.symbol === "BBB")!;
-  assert.ok(Math.abs(bbb.stopPrice - 93) < 1e-9);
+  assert.ok(Math.abs(bbb.stop!.price - 93) < 1e-9);
 });
 
 test("sorting by value uses live prices", () => {
   const sorted = sortBook(markBook(account, positions, { AAA: 500 }, rules, NO_FLOWS).rows, "value");
   assert.equal(sorted[0]!.symbol, "AAA");
+});
+
+test("with sized stops, the book measures a winner's stop from its high", () => {
+  const sized: RiskRules = {
+    ...rules,
+    stopSizing: { volMultiple: 2, narrowestPct: -8, widestPct: -30, trailing: true },
+    coreSymbols: ["BBB"],
+  };
+  const bases = {
+    AAA: { since: "2026-01-05", twoWeekMovePct: 10, high: 400, highDate: "2026-01-20", note: null },
+  };
+  const book = markBook(account, positions, {}, sized, NO_FLOWS, bases);
+  const aaa = book.rows.find((r) => r.symbol === "AAA")!;
+  assert.ok(Math.abs(aaa.stop!.price - 320) < 1e-9);
+  assert.equal(book.rows.find((r) => r.symbol === "BBB")!.stop, null, "a core fund has no stop");
+  // AAA at $300 is 25% below its $400 high, past its −20% stop.
+  const alerts = bookAlerts(book, sized)!;
+  assert.ok(alerts.some((a) => a.symbol === "AAA" && a.rule === "STOP LOSS"));
+  assert.ok(!alerts.some((a) => a.symbol === "BBB" && a.rule === "STOP LOSS"));
 });
